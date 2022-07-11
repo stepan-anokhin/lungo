@@ -13,6 +13,7 @@ class TokenType(enum.Enum):
     OPEN_BRACKET = "OPEN_BRACKET"
     CLOSE_BRACKET = "CLOSE_BRACKET"
     COMMA = "COMMA"
+    SEMICOLON = "SEMICOLON"
 
     # Atomic expressions
     NUMBER = "NUMBER"

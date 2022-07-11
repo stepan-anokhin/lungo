@@ -1,6 +1,6 @@
 import enum
 import operator as std_operators
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Sequence, Union
 
 from parsers.lexer import Token, TokenType, Lexer
 
@@ -21,6 +21,8 @@ class NodeTypes(enum.Enum):
     NUMBER_LITERAL = "NUMBER"
     VAR_NAME = "VAR_NAME"
     FUNC_CALL = "FUNC_CALL"
+    ASSIGN = "ASSIGN"
+    BLOCK = "BLOCK"
 
 
 class Node:
@@ -104,8 +106,81 @@ class FuncCall(Node):
         return func(*args)
 
 
+class Assign(Node):
+    type = NodeTypes.ASSIGN
+
+    def __init__(self, name, value):
+        self.name: str = name
+        self.value: Node = value
+
+    def execute(self, context):
+        value = self.value.execute(context)
+        context[self.name] = value
+        return value
+
+
+class Block(Node):
+    type = NodeTypes.BLOCK
+
+    def __init__(self, statements: List[Node]):
+        self.statements: List[Node] = statements
+
+    def execute(self, context):
+        value = None
+        for statement in self.statements:
+            value = statement.execute(context)
+        return value
+
+
+class TokenStream:
+    def __init__(self, tokens: Sequence[Token]):
+        self.tokens: Sequence[Token] = tuple(tokens)
+        self.position: int = 0
+
+    def match(self, *types):
+        for offset, expected_type in enumerate(types):
+            if offset + self.position >= len(self.tokens):
+                return False
+            actual_type = self.tokens[self.position + offset].type
+            if isinstance(expected_type, TokenType) and actual_type != expected_type:
+                return False
+            elif isinstance(expected_type, (list, tuple, set)) and actual_type not in expected_type:
+                return False
+        return True
+
+    def take(self, *types) -> Union[Token, List[Token]]:
+        if len(types) > 0:
+            tokens = []
+            for offset, expected_type in enumerate(types):
+                if self.position + offset >= len(self.tokens):
+                    raise SyntacticError(self.tokens[-1], expected_type)
+                actual_token = self.tokens[self.position + offset]
+                if isinstance(expected_type, TokenType) and actual_token.type != expected_type:
+                    raise SyntacticError(actual_token, expected_type)
+                elif isinstance(expected_type, (list, tuple, set)) and actual_token.type not in expected_type:
+                    raise SyntacticError(actual_token)
+                tokens.append(actual_token)
+                self.position += 1
+            if len(types) > 1:
+                return tokens
+            return tokens[0]
+        if self.position >= len(self.tokens):
+            raise SyntacticError(self.tokens[-1])
+        token = self.tokens[self.position]
+        self.position += 1
+        return token
+
+    def skip(self, *ignore: TokenType):
+        while self.match(ignore):
+            self.take()
+
+
 class Parser:
     """
+    program = statement ( ';' | \n ) program
+    statement = assign | expr
+    assign = name '=' expr
+    expr = sum
     sum = term | term + sum | term - sum
     term = factor | factor * term | factor / term
     factor = ( sum ) | number | name | func_call | - factor | + factor
@@ -113,68 +188,104 @@ class Parser:
     func_args = sum | sum , func_args
     """
 
-    def sum(self, tokens: List[Token], position: int) -> Tuple[Node, int]:
-        term, position = self.term(tokens, position)
-        if tokens[position].type == TokenType.PLUS:
-            right, position = self.sum(tokens, position + 1)
-            return BinaryOperator("+", term, right), position
-        elif tokens[position].type == TokenType.MINUS:
-            right, position = self.sum(tokens, position + 1)
-            return BinaryOperator("-", term, right), position
-        return term, position
-
-    def term(self, tokens: List[Token], position: int) -> Tuple[Node, int]:
-        factor, position = self.factor(tokens, position)
-        if tokens[position].type == TokenType.MUL:
-            right, position = self.term(tokens, position + 1)
-            return BinaryOperator("*", factor, right), position
-        elif tokens[position].type == TokenType.DIV:
-            right, position = self.term(tokens, position + 1)
-            return BinaryOperator("/", factor, right), position
-        return factor, position
-
-    def factor(self, tokens: List[Token], position: int) -> Tuple[Node, int]:
+    def program(self, tokens: TokenStream, end_program: TokenType) -> Node:
         """
-        factor = ( sum ) | number | name | func_call | - factor | + factor
+        program = statement ( ';' | \n ) program
         """
-        start_token = tokens[position]
-        if start_token.type == TokenType.OPEN_BRACKET:
-            expr, position = self.sum(tokens, position + 1)
-            position = self._consume(tokens, position, TokenType.CLOSE_BRACKET)
-            return expr, position
-        elif start_token.type == TokenType.NUMBER:
-            return NumberLiteral(value=int(start_token.text)), position + 1
-        elif start_token.type == TokenType.NAME:
-            if self._next(tokens, position) == TokenType.OPEN_BRACKET:
-                return self.func_call(tokens, position)
-            else:
-                var = VarName(start_token.text)
-                return var, position + 1
-        elif start_token.type == TokenType.MINUS:
-            arg, position = self.factor(tokens, position + 1)
-            return UnaryOperator("-", arg), position
-        elif start_token.type == TokenType.PLUS:
-            return self.factor(tokens, position + 1)
+        statements = []
+        tokens.skip(TokenType.NEW_LINE)
+        while not tokens.match(end_program):
+            statement = self.statement(tokens)
+            statements.append(statement)
+            tokens.skip(TokenType.NEW_LINE, TokenType.SEMICOLON)
+        return Block(statements)
+
+    def statement(self, tokens: TokenStream) -> Node:
+        """
+        statement = assign | expr
+        """
+        if tokens.match(TokenType.NAME, TokenType.ASSIGN):
+            return self.assign(tokens)
         else:
-            raise SyntacticError(start_token)
+            return self.expr(tokens)
 
-    def func_call(self, tokens: List[Token], position: int) -> Tuple[Node, int]:
-        name_token, position = self._take(tokens, position, TokenType.NAME)
-        position = self._consume(tokens, position, TokenType.OPEN_BRACKET)
-        args, position = self.func_args(tokens, position)
-        position = self._consume(tokens, position, TokenType.CLOSE_BRACKET)
-        return FuncCall(name_token.text, args), position
+    def assign(self, tokens: TokenStream) -> Node:
+        """
+        assign = name '=' expr
+        """
+        name = tokens.take(TokenType.NAME).text
+        tokens.take(TokenType.ASSIGN)
+        expr = self.expr(tokens)
+        return Assign(name, expr)
 
-    def func_args(self, tokens: List[Token], position: int) -> Tuple[List[Node], int]:
+    def expr(self, tokens: TokenStream) -> Node:
+        return self.sum(tokens)
+
+    def sum(self, tokens: TokenStream) -> Node:
+        """
+        sum = term | term + sum | term - sum
+        """
+        term = self.term(tokens)
+        if tokens.match([TokenType.PLUS, TokenType.MINUS]):
+            operator = tokens.take()
+            right = self.sum(tokens)
+            return BinaryOperator(operator.text, term, right)
+        return term
+
+    def term(self, tokens: TokenStream) -> Node:
+        """
+        term = factor | factor * term | factor / term
+        """
+        factor = self.factor(tokens)
+        if tokens.match([TokenType.MUL, TokenType.DIV]):
+            operator = tokens.take()
+            right = self.term(tokens)
+            return BinaryOperator(operator.text, factor, right)
+        return factor
+
+    def factor(self, tokens: TokenStream) -> Node:
+        """
+        factor = ( expr ) | number | name | func_call | - factor | + factor
+        """
+        if tokens.match(TokenType.OPEN_BRACKET):
+            tokens.take(TokenType.OPEN_BRACKET)
+            expr = self.expr(tokens)
+            tokens.take(TokenType.CLOSE_BRACKET)
+            return expr
+        elif tokens.match(TokenType.NUMBER):
+            value = int(tokens.take(TokenType.NUMBER).text)
+            return NumberLiteral(value)
+        elif tokens.match(TokenType.NAME, TokenType.OPEN_BRACKET):
+            return self.func_call(tokens)
+        elif tokens.match(TokenType.NAME):
+            return VarName(tokens.take(TokenType.NAME).text)
+        elif tokens.match(TokenType.MINUS):
+            tokens.take(TokenType.MINUS)
+            arg = self.factor(tokens)
+            return UnaryOperator("-", arg)
+        elif tokens.match(TokenType.PLUS):
+            tokens.take(TokenType.PLUS)
+            return self.factor(tokens)
+        else:
+            raise SyntacticError(tokens.take())
+
+    def func_call(self, tokens: TokenStream) -> Node:
+        name = tokens.take(TokenType.NAME).text
+        tokens.take(TokenType.OPEN_BRACKET)
+        args = self.func_args(tokens, args_end=TokenType.CLOSE_BRACKET)
+        tokens.take(TokenType.CLOSE_BRACKET)
+        return FuncCall(name, args)
+
+    def func_args(self, tokens: TokenStream, args_end=TokenType.CLOSE_BRACKET) -> List[Node]:
         args = []
-        if tokens[position].type != TokenType.CLOSE_BRACKET:
-            arg, position = self.sum(tokens, position)
+        if not tokens.match(args_end):
+            arg = self.expr(tokens)
             args.append(arg)
-        while tokens[position].type != TokenType.CLOSE_BRACKET:
-            position = self._consume(tokens, position, TokenType.COMMA)
-            arg, position = self.sum(tokens, position)
+        while not tokens.match(args_end):
+            tokens.take(TokenType.COMMA)
+            arg = self.expr(tokens)
             args.append(arg)
-        return args, position
+        return args
 
     @staticmethod
     def _consume(tokens: List[Token], position: int, expected_type: TokenType) -> int:
@@ -188,24 +299,10 @@ class Parser:
             return next_token, position + 1
         raise SyntacticError(next_token, expected_type)
 
-    @staticmethod
-    def _optional(tokens: List[Token], position: int, expected_type: TokenType) -> int:
-        next_token = tokens[position]
-        if next_token.type == expected_type:
-            return position + 1
-        return position
-
-    @staticmethod
-    def _next(tokens: List[Token], position: int) -> TokenType:
-        """Next token type."""
-        if position + 1 < len(tokens):
-            return tokens[position + 1].type
-        return TokenType.END
-
     def parse(self, tokens: List[Token]) -> Node:
-        tokens = [token for token in tokens if token.type != TokenType.SPACE]
-        expr, position = self.sum(tokens, position=0)
-        self._consume(tokens, position, TokenType.END)
+        tokens = TokenStream([token for token in tokens if token.type not in (TokenType.SPACE,)])
+        expr = self.program(tokens, end_program=TokenType.END)
+        tokens.take(TokenType.END)
         return expr
 
 
