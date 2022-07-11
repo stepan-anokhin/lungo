@@ -5,14 +5,27 @@ from typing import Dict
 
 class TokenType(enum.Enum):
     """Token types."""
+    # White spaces
     SPACE = "SPACE"
+    NEW_LINE = "NEW_LINE"
+
+    # Structural
     OPEN_BRACKET = "OPEN_BRACKET"
     CLOSE_BRACKET = "CLOSE_BRACKET"
+    COMMA = "COMMA"
+
+    # Atomic expressions
     NUMBER = "NUMBER"
+    NAME = "NAME"
+
+    # Complex expressions
     PLUS = "PLUS"
     MINUS = "MINUS"
     MUL = "MUL"
     DIV = "DIV"
+    ASSIGN = "ASSIGN"
+
+    # Technical
     UNKNOWN = "UNKNOWN"
     END = "END"
 
@@ -32,14 +45,18 @@ class Token:
 class Lexer:
     """Lexical analyzer."""
     default_patterns = {
-        TokenType.SPACE: r"\s+",
+        TokenType.SPACE: r"[ \t]+",
+        TokenType.NEW_LINE: r"\n",
+        TokenType.NAME: r"[a-zA-Z_][a-zA-Z_\d]*",
         TokenType.NUMBER: r"\d+",
         TokenType.OPEN_BRACKET: r"\(",
         TokenType.CLOSE_BRACKET: r"\)",
+        TokenType.COMMA: r",",
         TokenType.PLUS: r"\+",
         TokenType.MINUS: r"\-",
         TokenType.MUL: r"\*",
         TokenType.DIV: r"/",
+        TokenType.ASSIGN: r"=(?=[^=])"
     }
 
     def __init__(self, patterns=None):
@@ -68,6 +85,14 @@ class Lexer:
         return list(self.iter_tokens(text))
 
 
-# lexer = Lexer()
-# for token in lexer.tokens("x"):
-#     print(token)
+def main():
+    lexer = Lexer()
+    text = "hello\n   \n\nworld"
+    while text.strip() not in ["\\q", "exit"]:
+        for token in lexer.iter_tokens(text):
+            print(token)
+        text = input()
+
+
+if __name__ == '__main__':
+    main()
