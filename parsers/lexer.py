@@ -18,6 +18,8 @@ class TokenType(enum.Enum):
     # Atomic expressions
     NUMBER = "NUMBER"
     NAME = "NAME"
+    TRUE = "TRUE"
+    FALSE = "FALSE"
 
     # Complex expressions
     PLUS = "PLUS"
@@ -25,6 +27,15 @@ class TokenType(enum.Enum):
     MUL = "MUL"
     DIV = "DIV"
     ASSIGN = "ASSIGN"
+    NOT = "NOT"
+    LT = "LT"
+    LE = "LE"
+    GT = "GT"
+    GE = "GE"
+    EQ = "EQ"
+    NE = "NE"
+    AND = "AND"
+    OR = "OR"
 
     # Technical
     UNKNOWN = "UNKNOWN"
@@ -48,7 +59,8 @@ class Lexer:
     default_patterns = {
         TokenType.SPACE: r"[ \t]+",
         TokenType.NEW_LINE: r"\n",
-        TokenType.NAME: r"[a-zA-Z_][a-zA-Z_\d]*",
+        TokenType.SEMICOLON: r";",
+        TokenType.NAME: r"(?!true|false)[a-zA-Z_][a-zA-Z_\d]*",
         TokenType.NUMBER: r"\d+",
         TokenType.OPEN_BRACKET: r"\(",
         TokenType.CLOSE_BRACKET: r"\)",
@@ -57,7 +69,18 @@ class Lexer:
         TokenType.MINUS: r"\-",
         TokenType.MUL: r"\*",
         TokenType.DIV: r"/",
-        TokenType.ASSIGN: r"=(?=[^=])"
+        TokenType.ASSIGN: r"=(?=[^=])",
+        TokenType.TRUE: r"true",
+        TokenType.FALSE: r"false",
+        TokenType.NOT: r"!(?=[^=])",
+        TokenType.LT: r"<(?=[^=])",
+        TokenType.LE: r"<=",
+        TokenType.GT: r">(?=[^=])",
+        TokenType.GE: r">=",
+        TokenType.EQ: r"==",
+        TokenType.NE: r"!=",
+        TokenType.AND: r"&&",
+        TokenType.OR: r"\|\|",
     }
 
     def __init__(self, patterns=None):

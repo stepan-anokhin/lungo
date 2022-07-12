@@ -18,7 +18,7 @@ class NodeTypes(enum.Enum):
     """Node type ids."""
     BINARY_OPERATOR = "BINARY_OPERATOR"
     UNARY_OPERATOR = "UNARY_OPERATOR"
-    NUMBER_LITERAL = "NUMBER"
+    VALUE_LITERAL = "NUMBER"
     VAR_NAME = "VAR_NAME"
     FUNC_CALL = "FUNC_CALL"
     ASSIGN = "ASSIGN"
@@ -38,7 +38,15 @@ class BinaryOperator(Node):
         "+": std_operators.add,
         "-": std_operators.sub,
         "*": std_operators.mul,
-        "/": std_operators.truediv
+        "/": std_operators.truediv,
+        "==": std_operators.eq,
+        "!=": std_operators.ne,
+        "<": std_operators.lt,
+        "<=": std_operators.le,
+        ">": std_operators.gt,
+        ">=": std_operators.ge,
+        "&&": std_operators.and_,
+        "||": std_operators.or_,
     }
 
     def __init__(self, operator: str, left: Node, right: Node):
@@ -59,6 +67,7 @@ class UnaryOperator(Node):
     supported_operators = {
         "-": std_operators.neg,
         "+": lambda x: x,
+        "!": std_operators.not_
     }
 
     def __init__(self, operator, arg):
@@ -74,9 +83,9 @@ class UnaryOperator(Node):
             raise RuntimeError("Unsupported unary operator:", self.operator)
 
 
-class NumberLiteral(Node):
+class ValueLiteral(Node):
     def __init__(self, value):
-        self.type = NodeTypes.NUMBER_LITERAL
+        self.type = NodeTypes.VALUE_LITERAL
         self.value = value
 
     def execute(self, context):
@@ -180,10 +189,13 @@ class Parser:
     program = statement ( ';' | \n ) program
     statement = assign | expr
     assign = name '=' expr
-    expr = sum
+    expr = disj
+    disj = conj | conj '||' disj
+    conj = comparison | comparison && conj
+    comparison = sum | sum < comparison | sum <= comparison | sum > comparison | sum >= comparison | sum == comparison
     sum = term | term + sum | term - sum
     term = factor | factor * term | factor / term
-    factor = ( sum ) | number | name | func_call | - factor | + factor
+    factor = ( sum ) | number | true | false | name | func_call | - factor | + factor | ! factor
     func_call = name ( func_args ) | name ( )
     func_args = sum | sum , func_args
     """
@@ -219,33 +231,66 @@ class Parser:
         return Assign(name, expr)
 
     def expr(self, tokens: TokenStream) -> Node:
-        return self.sum(tokens)
+        return self.disj(tokens)
+
+    def disj(self, tokens: TokenStream) -> Node:
+        """
+        disj = conj | conj '||' disj
+        """
+        left = self.conj(tokens)
+        if tokens.match(TokenType.OR):
+            operator = tokens.take()
+            right = self.disj(tokens)
+            return BinaryOperator(operator.text, left, right)
+        return left
+
+    def conj(self, tokens: TokenStream) -> Node:
+        """
+        conj = comparison | comparison && conj
+        """
+        left = self.comparison(tokens)
+        if tokens.match(TokenType.AND):
+            operator = tokens.take()
+            right = self.conj(tokens)
+            return BinaryOperator(operator.text, left, right)
+        return left
+
+    def comparison(self, tokens: TokenStream) -> Node:
+        """
+        comparison = sum | sum < comparison | sum <= comparison | sum > comparison | sum >= comparison | sum == comparison | sum != comparison
+        """
+        left = self.sum(tokens)
+        if tokens.match([TokenType.LE, TokenType.LT, TokenType.GE, TokenType.GT, TokenType.EQ, TokenType.NE]):
+            operator = tokens.take()
+            right = self.sum(tokens)
+            return BinaryOperator(operator.text, left, right)
+        return left
 
     def sum(self, tokens: TokenStream) -> Node:
         """
         sum = term | term + sum | term - sum
         """
-        term = self.term(tokens)
+        left = self.term(tokens)
         if tokens.match([TokenType.PLUS, TokenType.MINUS]):
             operator = tokens.take()
             right = self.sum(tokens)
-            return BinaryOperator(operator.text, term, right)
-        return term
+            return BinaryOperator(operator.text, left, right)
+        return left
 
     def term(self, tokens: TokenStream) -> Node:
         """
         term = factor | factor * term | factor / term
         """
-        factor = self.factor(tokens)
+        left = self.factor(tokens)
         if tokens.match([TokenType.MUL, TokenType.DIV]):
             operator = tokens.take()
             right = self.term(tokens)
-            return BinaryOperator(operator.text, factor, right)
-        return factor
+            return BinaryOperator(operator.text, left, right)
+        return left
 
     def factor(self, tokens: TokenStream) -> Node:
         """
-        factor = ( expr ) | number | name | func_call | - factor | + factor
+        factor = ( sum ) | number | true | false | name | func_call | - factor | + factor | ! factor
         """
         if tokens.match(TokenType.OPEN_BRACKET):
             tokens.take(TokenType.OPEN_BRACKET)
@@ -254,15 +299,18 @@ class Parser:
             return expr
         elif tokens.match(TokenType.NUMBER):
             value = int(tokens.take(TokenType.NUMBER).text)
-            return NumberLiteral(value)
+            return ValueLiteral(value)
+        elif tokens.match([TokenType.TRUE, TokenType.FALSE]):
+            value = tokens.take([TokenType.TRUE, TokenType.FALSE]).text == "true"
+            return ValueLiteral(value)
         elif tokens.match(TokenType.NAME, TokenType.OPEN_BRACKET):
             return self.func_call(tokens)
         elif tokens.match(TokenType.NAME):
             return VarName(tokens.take(TokenType.NAME).text)
-        elif tokens.match(TokenType.MINUS):
-            tokens.take(TokenType.MINUS)
+        elif tokens.match([TokenType.MINUS, TokenType.NOT]):
+            operator = tokens.take([TokenType.MINUS, TokenType.NOT])
             arg = self.factor(tokens)
-            return UnaryOperator("-", arg)
+            return UnaryOperator(operator.text, arg)
         elif tokens.match(TokenType.PLUS):
             tokens.take(TokenType.PLUS)
             return self.factor(tokens)
