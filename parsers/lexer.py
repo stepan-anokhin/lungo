@@ -1,5 +1,6 @@
 import enum
 import re
+from dataclasses import dataclass
 from typing import Dict
 
 
@@ -46,18 +47,27 @@ class TokenType(enum.Enum):
     END = "END"
 
 
+@dataclass
+class Position:
+    """Position in source code."""
+    abs: int  # Absolute position in characters
+    line: int  # Line number
+    in_line: int  # Position in line
+
+    def __repr__(self):
+        return f"{self.abs}:{self.line}:{self.in_line}"
+
+
 class Token:
     """Represents a token in a text."""
 
-    def __init__(self, token_type: TokenType, text: str, abs_pos: int, line: int, line_pos: int):
+    def __init__(self, token_type: TokenType, text: str, pos: Position):
         self.type: TokenType = token_type
         self.text: str = text
-        self.abs_pos: int = abs_pos  # absolute start position
-        self.line: int = line  # line number
-        self.line_pos: int = line_pos  # start position in line
+        self.pos: Position = pos
 
     def __repr__(self):
-        return f"<{self.type.name} {repr(self.text)} at={self.abs_pos}:{self.line}:{self.line_pos}>"
+        return f"<{self.type.name} {repr(self.text)} at={self.pos}>"
 
 
 class Lexer:
@@ -103,20 +113,36 @@ class Lexer:
 
     def iter_tokens(self, text: str):
         """Split text in tokens."""
-        position, line_number, line_start = 0, 0, 0
+        abs_pos, line_num, line_start = 0, 0, 0
+        # Iterate over known patterns
         for match in self.regex.finditer(text):
-            token_type = TokenType[match.lastgroup]
+            # Get position of the found pattern match
             start, end = match.span()
-            if start != position:
-                yield Token(TokenType.UNKNOWN, text[position:start], position, line_number, position - line_start)
-            position = end
-            yield Token(token_type, text[start:end], start, line_number, start - line_start)
+
+            # If we skipped some text between
+            # previous match and current match,
+            # mark the skipped text as UNKNOWN
+            if start != abs_pos:
+                skipped_pos = Position(abs_pos, line_num, abs_pos - line_start)
+                yield Token(TokenType.UNKNOWN, text[abs_pos:start], skipped_pos)
+
+            # Produce a new token
+            token_type = TokenType[match.lastgroup]
+            yield Token(token_type, text[start:end], Position(start, line_num, start - line_start))
+
+            # Update position
+            abs_pos = end
             if token_type == TokenType.NEW_LINE:
-                line_number += 1
+                line_num += 1
                 line_start = end
-        if position != len(text):
-            yield Token(TokenType.UNKNOWN, text[position:], position, line_number, position - line_start)
-        yield Token(TokenType.END, '', len(text), line_number, len(text) - line_start)
+
+        # Mark the remaining portion of the text as UNKNOWN
+        # because it doesn't contain any known patterns
+        if abs_pos != len(text):
+            yield Token(TokenType.UNKNOWN, text[abs_pos:], Position(abs_pos, line_num, abs_pos - line_start))
+
+        # Produce the END token when we processed entire text
+        yield Token(TokenType.END, '', Position(len(text), line_num, len(text) - line_start))
 
     def tokens(self, text):
         return list(self.iter_tokens(text))

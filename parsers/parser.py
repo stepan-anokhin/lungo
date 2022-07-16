@@ -1,7 +1,6 @@
-import enum
-from dataclasses import dataclass
-from typing import List, Sequence
+from typing import Sequence
 
+import parsers.ast as ast
 from parsers.lexer import Token, TokenType, Lexer
 from parsers.token_stream import TokenStream, TokenSelector, UnexpectedToken
 
@@ -14,111 +13,20 @@ class SyntacticError(Exception):
         self.reason: UnexpectedToken = reason
 
 
-class NodeType(enum.Enum):
-    """Node type ids."""
-    BINARY_OPERATOR = "BINARY_OPERATOR"
-    UNARY_OPERATOR = "UNARY_OPERATOR"
-    NUMBER_LITERAL = "NUMBER_LITERAL"
-    BOOL_LITERAL = "BOOL_LITERAL"
-    VAR_NAME = "VAR_NAME"
-    FUNC_CALL = "FUNC_CALL"
-    ASSIGN = "ASSIGN"
-    BLOCK = "BLOCK"
-    COND = "COND"
-
-
-class Node:
-    """Basic node class."""
-    type: NodeType
-
-
-class BinaryOperator(Node):
-    type: NodeType = NodeType.BINARY_OPERATOR
-
-    def __init__(self, operator: str, left: Node, right: Node):
-        self.operator: str = operator
-        self.left: Node = left
-        self.right: Node = right
-
-
-class UnaryOperator(Node):
-    type: NodeType = NodeType.UNARY_OPERATOR
-
-    def __init__(self, operator: str, arg: Node):
-        self.operator: str = operator
-        self.arg: Node = arg
-
-
-class NumberLiteral(Node):
-    type = NodeType.NUMBER_LITERAL
-
-    def __init__(self, value: str):
-        self.value: str = value
-
-
-class BoolLiteral(Node):
-    type = NodeType.BOOL_LITERAL
-
-    def __init__(self, value: str):
-        self.value: str = value
-
-
-class VarName(Node):
-    type = NodeType.VAR_NAME
-
-    def __init__(self, name: str):
-        self.name: str = name
-
-
-class FuncCall(Node):
-    type = NodeType.FUNC_CALL
-
-    def __init__(self, name: str, args: Sequence[Node]):
-        self.name: str = name
-        self.args: Sequence[Node] = tuple(args)
-
-
-class Assign(Node):
-    type = NodeType.ASSIGN
-
-    def __init__(self, name, value):
-        self.name: str = name
-        self.value: Node = value
-
-
-class Block(Node):
-    type = NodeType.BLOCK
-
-    def __init__(self, statements: List[Node]):
-        self.statements: List[Node] = statements
-
-
-class Cond(Node):
-    type = NodeType.COND
-
-    @dataclass
-    class Block:
-        cond: Node
-        body: Node
-
-    def __init__(self, cond_blocks: List[Block], else_block: Node = None):
-        self.cond_blocks = cond_blocks
-        self.else_block = else_block
-
-
 class Parser:
     """
-    program = statement ';' program
-    statement = assign | expr
-    assign = name '=' expr
-    block = '{' program '}'
-    expr = binary_expr
-    binary_expr[prio=n] = binary_arg[prio=n] | binary_arg[prio=n] '<binary_operator[prio=n]>' binary_expr[prio=n]
-    binary_arg[prio=n] = binary_expr[prio=n+1] | unary_expr
-    unary_expr = ( expr ) | if | number | bool | name | func_call | '<unary_operator>' unary_expr
-    if = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
-    func_call = name '(' func_args ')' | name '(' ')'
-    func_args = expr | expr ',' func_args
+    Grammar:
+        program = statement | statement ';' program
+        statement = assign | expr
+        assign = name '=' expr
+        block = '{' program '}'
+        expr = binary_expr
+        binary_expr[prio=n] = binary_arg[prio=n] | binary_arg[prio=n] '<binary_operator[prio=n]>' binary_expr[prio=n]
+        binary_arg[prio=n] = binary_expr[prio=n+1] | unary_expr
+        unary_expr = ( expr ) | cond | number | bool | name | func_call | '<unary_operator>' unary_expr
+        cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
+        func_call = name '(' func_args ')' | name '(' ')'
+        func_args = expr | expr ',' func_args
     """
 
     # Binary operators from the lowest priority to the highest
@@ -133,12 +41,13 @@ class Parser:
     # Supported unary operators
     UNARY_OPERATORS = (TokenType.PLUS, TokenType.MINUS, TokenType.NOT)
 
-    def program(self, tokens: TokenStream, end_program: TokenSelector) -> Node:
+    def program(self, tokens: TokenStream, end_program: TokenSelector) -> ast.Node:
         """
         program = statement ';' program | statement
         """
         try:
             statements = []
+            start = tokens.current.pos
             if not tokens.match(end_program):
                 statement = self.statement(tokens)
                 statements.append(statement)
@@ -147,11 +56,11 @@ class Parser:
                 tokens.take(TokenType.SEMICOLON)
                 statement = self.statement(tokens)
                 statements.append(statement)
-            return Block(statements)
+            return ast.Block(statements, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse code block", reason=e)
 
-    def block(self, tokens: TokenStream) -> Node:
+    def block(self, tokens: TokenStream) -> ast.Node:
         """
         block = '{' program '}'
         """
@@ -163,7 +72,7 @@ class Parser:
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse code block", reason=e)
 
-    def statement(self, tokens: TokenStream) -> Node:
+    def statement(self, tokens: TokenStream) -> ast.Node:
         """
         statement = assign | expr
         """
@@ -172,36 +81,38 @@ class Parser:
         else:
             return self.expr(tokens)
 
-    def assign(self, tokens: TokenStream) -> Node:
+    def assign(self, tokens: TokenStream) -> ast.Node:
         """
         assign = name '=' expr
         """
         try:
-            name = tokens.take(TokenType.NAME).text
+            start = tokens.current.pos
+            name = tokens.take(TokenType.NAME)
             tokens.take(TokenType.ASSIGN)
             expr = self.expr(tokens)
-            return Assign(name, expr)
+            return ast.Assign(name, expr, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse assignment", reason=e)
 
-    def expr(self, tokens: TokenStream) -> Node:
+    def expr(self, tokens: TokenStream) -> ast.Node:
         """
         expr = binary_expr
         """
         return self.binary_expr(tokens)
 
-    def binary_expr(self, tokens: TokenStream, priority: int = 0) -> Node:
+    def binary_expr(self, tokens: TokenStream, priority: int = 0) -> ast.Node:
         """
         binary_expr[prio=n] = binary_arg[prio=n] | binary_arg[prio=n] '<binary_operator[prio=n]>' binary_expr[prio=n]
         """
+        start = tokens.current.pos
         expr = self.binary_arg(tokens, priority)
         while tokens.match(self.BINARY_OPERATORS[priority]):
             operator = tokens.take(self.BINARY_OPERATORS[priority])
             right_arg = self.binary_arg(tokens, priority)
-            expr = BinaryOperator(operator.text, expr, right_arg)
+            expr = ast.BinaryOperator(operator, expr, right_arg, pos=start)
         return expr
 
-    def binary_arg(self, tokens: TokenStream, priority: int = 0) -> Node:
+    def binary_arg(self, tokens: TokenStream, priority: int = 0) -> ast.Node:
         """
         binary_arg[prio=n] = binary_expr[prio=n+1] | unary_expr
         """
@@ -209,7 +120,7 @@ class Parser:
             return self.binary_expr(tokens, priority + 1)
         return self.unary_expr(tokens)
 
-    def unary_expr(self, tokens: TokenStream) -> Node:
+    def unary_expr(self, tokens: TokenStream) -> ast.Node:
         """
         unary_expr = ( expr ) | number | bool | func_call | name | if | '<unary_operator>' unary_expr
         """
@@ -221,21 +132,21 @@ class Parser:
                 return expr
             elif tokens.match(TokenType.NUMBER):
                 value = tokens.take(TokenType.NUMBER)
-                return NumberLiteral(value.text)
+                return ast.NumberLiteral(value)
             elif tokens.match(TokenType.BOOL):
                 value = tokens.take(TokenType.BOOL)
-                return BoolLiteral(value.text)
+                return ast.BoolLiteral(value)
             elif tokens.match(TokenType.NAME, TokenType.OPEN_BRACKET):
                 return self.func_call(tokens)
             elif tokens.match(TokenType.NAME):
                 name = tokens.take(TokenType.NAME)
-                return VarName(name.text)
+                return ast.VarName(name)
             elif tokens.match(TokenType.IF):
                 return self.cond(tokens)
             elif tokens.match(self.UNARY_OPERATORS):
                 operator = tokens.take(self.UNARY_OPERATORS)
                 arg = self.unary_expr(tokens)
-                return UnaryOperator(operator.text, arg)
+                return ast.UnaryOperator(operator, arg, pos=operator.pos)
             else:
                 expected = (
                     TokenType.OPEN_BRACKET, TokenType.NUMBER, TokenType.BOOL,
@@ -245,20 +156,20 @@ class Parser:
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse unary expression", reason=e)
 
-    def func_call(self, tokens: TokenStream) -> Node:
+    def func_call(self, tokens: TokenStream) -> ast.Node:
         """
         func_call = name '(' func_args ')' | name '(' ')'
         """
         try:
-            name = tokens.take(TokenType.NAME).text
+            name = tokens.take(TokenType.NAME)
             tokens.take(TokenType.OPEN_BRACKET)
             args = self.func_args(tokens, args_end=TokenType.CLOSE_BRACKET)
             tokens.take(TokenType.CLOSE_BRACKET)
-            return FuncCall(name, args)
+            return ast.FuncCall(name, args, pos=name.pos)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function call", reason=e)
 
-    def func_args(self, tokens: TokenStream, args_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[Node]:
+    def func_args(self, tokens: TokenStream, args_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[ast.Node]:
         """
         func_args = expr | expr ',' func_args
         """
@@ -275,17 +186,18 @@ class Parser:
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function arguments", reason=e)
 
-    def cond(self, tokens: TokenStream) -> Node:
+    def cond(self, tokens: TokenStream) -> ast.Node:
         """
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
         """
         try:
+            start = tokens.current.pos
             tokens.take(TokenType.IF, TokenType.OPEN_BRACKET)
             expr = self.expr(tokens)
             tokens.take(TokenType.CLOSE_BRACKET)
             body = self.block(tokens)
 
-            cond_blocks = [Cond.Block(expr, body)]
+            cond_blocks = [ast.Cond.Block(expr, body)]
             else_block = None
 
             while tokens.match(TokenType.ELIF):
@@ -293,21 +205,20 @@ class Parser:
                 expr = self.expr(tokens)
                 tokens.take(TokenType.CLOSE_BRACKET)
                 body = self.block(tokens)
-                cond_blocks.append(Cond.Block(expr, body))
+                cond_blocks.append(ast.Cond.Block(expr, body))
 
             if tokens.match(TokenType.ELSE):
                 tokens.take(TokenType.ELSE)
                 else_block = self.block(tokens)
 
-            return Cond(cond_blocks, else_block)
+            return ast.Cond(cond_blocks, else_block, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse conditional expression", reason=e)
 
-    def parse(self, tokens: Sequence[Token]) -> Node:
+    def parse(self, tokens: Sequence[Token]) -> ast.Node:
         ignore = (TokenType.SPACE, TokenType.NEW_LINE)
         tokens = tuple(token for token in tokens if token.type not in ignore)
-        expr = self.program(TokenStream(tokens), end_program=TokenType.END)
-        return expr
+        return self.program(TokenStream(tokens), end_program=TokenType.END)
 
 
 def main():
