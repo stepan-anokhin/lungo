@@ -22,11 +22,14 @@ class Parser:
         block = '{' program '}'
         expr = binary_expr
         binary_expr[prio=n] = binary_arg[prio=n] | binary_arg[prio=n] '<binary_operator[prio=n]>' binary_expr[prio=n]
-        binary_arg[prio=n] = binary_expr[prio=n+1] | unary_expr
-        unary_expr = ( expr ) | cond | number | bool | name | func_call | '<unary_operator>' unary_expr
+        binary_arg[prio=n] = binary_expr[prio=n+1] | prefix_expr
+        prefix_expr = '<unary_operator>' prefix_expr | postfix_expr
+        postfix_expr = postfix_arg postfix_operation
+        postfix_arg = ( expr ) | cond | number | bool | name
+        postfix_operation = func_call
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
-        func_call = name '(' func_args ')' | name '(' ')'
-        func_args = expr | expr ',' func_args
+        func_call = '(' expr_list ')'
+        expr_list = expr | expr ',' expr_list
     """
 
     # Binary operators from the lowest priority to the highest
@@ -114,15 +117,45 @@ class Parser:
 
     def binary_arg(self, tokens: TokenStream, priority: int = 0) -> ast.Node:
         """
-        binary_arg[prio=n] = binary_expr[prio=n+1] | unary_expr
+        binary_arg[prio=n] = binary_expr[prio=n+1] | prefix_expr
         """
         if priority + 1 < len(self.BINARY_OPERATORS):
             return self.binary_expr(tokens, priority + 1)
-        return self.unary_expr(tokens)
+        return self.prefix_expr(tokens)
 
-    def unary_expr(self, tokens: TokenStream) -> ast.Node:
+    def prefix_expr(self, tokens: TokenStream) -> ast.Node:
         """
-        unary_expr = ( expr ) | number | bool | func_call | name | if | '<unary_operator>' unary_expr
+        prefix_expr = '<unary_operator>' prefix_expr | postfix_expr
+        """
+        try:
+            if tokens.match(self.UNARY_OPERATORS):
+                operator = tokens.take(self.UNARY_OPERATORS)
+                arg = self.prefix_expr(tokens)
+                return ast.UnaryOperator(operator, arg, pos=operator.pos)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse prefix expr", reason=e)
+        return self.postfix_expr(tokens)
+
+    def postfix_expr(self, tokens: TokenStream) -> ast.Node:
+        """
+        postfix_expr = postfix_arg postfix_operation
+        """
+        arg = self.postfix_arg(tokens)
+        return self.postfix_operation(tokens, arg)
+
+    def postfix_operation(self, tokens: TokenStream, arg: ast.Node) -> ast.Node:
+        """
+        postfix_operation = func_call
+        """
+        if tokens.match(TokenType.OPEN_BRACKET):
+            func_call = self.func_call(tokens, arg)
+            return self.postfix_operation(tokens, func_call)
+        else:
+            return arg
+
+    def postfix_arg(self, tokens: TokenStream) -> ast.Node:
+        """
+        postfix_arg = '(' expr ')' | cond | number | bool | name
         """
         try:
             if tokens.match(TokenType.OPEN_BRACKET):
@@ -136,55 +169,49 @@ class Parser:
             elif tokens.match(TokenType.BOOL):
                 value = tokens.take(TokenType.BOOL)
                 return ast.BoolLiteral(value)
-            elif tokens.match(TokenType.NAME, TokenType.OPEN_BRACKET):
-                return self.func_call(tokens)
             elif tokens.match(TokenType.NAME):
                 name = tokens.take(TokenType.NAME)
-                return ast.VarName(name)
+                return ast.NameRef(name)
             elif tokens.match(TokenType.IF):
                 return self.cond(tokens)
-            elif tokens.match(self.UNARY_OPERATORS):
-                operator = tokens.take(self.UNARY_OPERATORS)
-                arg = self.unary_expr(tokens)
-                return ast.UnaryOperator(operator, arg, pos=operator.pos)
             else:
                 expected = (
-                    TokenType.OPEN_BRACKET, TokenType.NUMBER, TokenType.BOOL,
-                    TokenType.NAME, TokenType.IF, *self.UNARY_OPERATORS
+                    TokenType.OPEN_BRACKET, TokenType.NUMBER,
+                    TokenType.BOOL, TokenType.NAME, TokenType.IF
                 )
                 raise UnexpectedToken(tokens.current, expected)
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse unary expression", reason=e)
+            raise SyntacticError("Cannot parse postfix arg", reason=e)
 
-    def func_call(self, tokens: TokenStream) -> ast.Node:
+    def func_call(self, tokens: TokenStream, func: ast.Node) -> ast.Node:
         """
-        func_call = name '(' func_args ')' | name '(' ')'
+        func_call = '(' expr_list ')' | '(' ')'
         """
         try:
-            name = tokens.take(TokenType.NAME)
+            start = tokens.current.pos
             tokens.take(TokenType.OPEN_BRACKET)
-            args = self.func_args(tokens, args_end=TokenType.CLOSE_BRACKET)
+            args = self.expr_list(tokens, list_end=TokenType.CLOSE_BRACKET)
             tokens.take(TokenType.CLOSE_BRACKET)
-            return ast.FuncCall(name, args, pos=name.pos)
+            return ast.FuncCall(func, args, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function call", reason=e)
 
-    def func_args(self, tokens: TokenStream, args_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[ast.Node]:
+    def expr_list(self, tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[ast.Node]:
         """
-        func_args = expr | expr ',' func_args
+        expr_list = expr | expr ',' expr_list
         """
         try:
             args = []
-            if not tokens.match(args_end):
+            if not tokens.match(list_end):
                 arg = self.expr(tokens)
                 args.append(arg)
-            while not tokens.match(args_end):
+            while not tokens.match(list_end):
                 tokens.take(TokenType.COMMA)
                 arg = self.expr(tokens)
                 args.append(arg)
             return args
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse function arguments", reason=e)
+            raise SyntacticError("Cannot parse expression list", reason=e)
 
     def cond(self, tokens: TokenStream) -> ast.Node:
         """

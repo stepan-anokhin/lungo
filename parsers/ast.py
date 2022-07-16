@@ -36,15 +36,15 @@ class BoolLiteral(Node):
         self.pos = value.pos
 
 
-class VarName(Node):
+class NameRef(Node):
     def __init__(self, name: Token):
         self.name: Token = name
         self.pos = name.pos
 
 
 class FuncCall(Node):
-    def __init__(self, name: Token, args: Sequence[Node], pos: Position):
-        self.name: Token = name
+    def __init__(self, func: Node, args: Sequence[Node], pos: Position):
+        self.func: Node = func
         self.args: Sequence[Node] = tuple(args)
         self.pos = pos
 
