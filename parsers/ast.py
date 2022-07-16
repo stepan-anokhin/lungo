@@ -75,6 +75,27 @@ class Block(Node):
         self.pos = pos
 
 
+class FuncExpr(Node):
+    def __init__(self, name: Optional[Token], arg_names: Sequence[Token], body: Node, pos: Position):
+        self.name: Optional[Token] = name
+        self.arg_names: Sequence[Token] = arg_names
+        self.body = body
+        self.pos = pos
+
+
+class DefineVar(Node):
+    def __init__(self, name: Token, value: Node, pos: Position):
+        self.name: Token = name
+        self.value: Node = value
+        self.pos = pos
+
+
+class Return(Node):
+    def __init__(self, value: Node, pos: Position):
+        self.value: Node = value
+        self.pos = pos
+
+
 class Cond(Node):
     @dataclass
     class Block:

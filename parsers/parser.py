@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Optional
 
 import parsers.ast as ast
 from parsers.lexer import Token, TokenType, Lexer
@@ -17,8 +17,10 @@ class Parser:
     """
     Grammar:
         program = statement | statement ';' program
-        statement = assign | expr
+        statement = assign | define | ret | expr
         assign = name '=' expr
+        define = 'let' name '=' expr
+        ret = 'return' expr
         block = '{' program '}'
         expr = binary_expr
         binary_expr[prio=n] = binary_arg[prio=n] | binary_arg[prio=n] '<binary_operator[prio=n]>' binary_expr[prio=n]
@@ -29,6 +31,7 @@ class Parser:
         list = '[' expr_list ']'
         postfix_operation = func_call | get_item
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
+        func = 'func' name ? '(' name_list ')' block
         func_call = '(' expr_list ')'
         get_item = '[' expr ']'
         expr_list = expr | expr ',' expr_list
@@ -79,10 +82,14 @@ class Parser:
 
     def statement(self, tokens: TokenStream) -> ast.Node:
         """
-        statement = assign | expr
+        statement = assign | define | ret | expr
         """
         if tokens.match(TokenType.NAME, TokenType.ASSIGN):
             return self.assign(tokens)
+        elif tokens.match(TokenType.LET):
+            return self.define_var(tokens)
+        elif tokens.match(TokenType.RETURN):
+            return self.ret(tokens)
         else:
             return self.expr(tokens)
 
@@ -98,6 +105,32 @@ class Parser:
             return ast.Assign(name, expr, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse assignment", reason=e)
+
+    def define_var(self, tokens: TokenStream) -> ast.Node:
+        """
+        define = 'let' name '=' expr
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.LET)
+            name = tokens.take(TokenType.NAME)
+            tokens.take(TokenType.EQ)
+            value = self.expr(tokens)
+            return ast.DefineVar(name, value, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse variable definition", reason=e)
+
+    def ret(self, tokens: TokenStream) -> ast.Node:
+        """
+        ret = 'return' expr
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.RETURN)
+            value = self.expr(tokens)
+            return ast.Return(value, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse return statement", reason=e)
 
     def expr(self, tokens: TokenStream) -> ast.Node:
         """
@@ -160,7 +193,7 @@ class Parser:
 
     def postfix_arg(self, tokens: TokenStream) -> ast.Node:
         """
-        postfix_arg = '(' expr ')' | list | cond | number | bool | name
+        postfix_arg = '(' expr ')' | list | cond | func | number | bool | name
         """
         try:
             if tokens.match(TokenType.OPEN_BRACKET):
@@ -179,6 +212,8 @@ class Parser:
                 return ast.NameRef(name)
             elif tokens.match(TokenType.IF):
                 return self.cond(tokens)
+            elif tokens.match(TokenType.FUNC):
+                return self.func(tokens)
             elif tokens.match(TokenType.OPEN_SB):
                 return self.list(tokens)
             else:
@@ -243,6 +278,42 @@ class Parser:
             return args
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse expression list", reason=e)
+
+    def func(self, tokens: TokenStream) -> ast.Node:
+        """
+        func = 'func' name? '(' name_list ')' block
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.FUNC)
+            name: Optional[Token] = None
+            if tokens.match(TokenType.NAME):
+                name = tokens.take(TokenType.NAME)
+            tokens.take(TokenType.OPEN_BRACKET)
+            arg_names = self.name_list(tokens, list_end=TokenType.CLOSE_BRACKET)
+            tokens.take(TokenType.CLOSE_BRACKET)
+            body = self.block(tokens)
+            return ast.FuncExpr(name, arg_names, body, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse function expression", reason=e)
+
+    @staticmethod
+    def name_list(tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[Token]:
+        """
+        name_list = name | name ',' name_list
+        """
+        try:
+            names = []
+            if not tokens.match(list_end):
+                name = tokens.take(TokenType.NAME)
+                names.append(name)
+            while not tokens.match(list_end):
+                tokens.take(TokenType.COMMA)
+                name = tokens.take(TokenType.NAME)
+                names.append(name)
+            return names
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse name list", reason=e)
 
     def cond(self, tokens: TokenStream) -> ast.Node:
         """

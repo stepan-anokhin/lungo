@@ -22,6 +22,11 @@ class TokenType(enum.Enum):
     IF = "IF"
     ELIF = "ELIF"
     ELSE = "ELSE"
+    FUNC = "FUNC"
+
+    # Statements
+    LET = "LET"
+    RETURN = "RETURN"
 
     # Atomic expressions
     NUMBER = "NUMBER"
@@ -78,7 +83,7 @@ class Lexer:
         TokenType.SPACE: r"[ \t]+",
         TokenType.NEW_LINE: r"\n",
         TokenType.SEMICOLON: r";",
-        TokenType.NAME: r"(?!(?:true|false|if|elif|else)([^a-zA-Z_\d]|$))[a-zA-Z_][a-zA-Z_\d]*",
+        TokenType.NAME: r"(?!(?:true|false|if|elif|else|func|let|return)([^a-zA-Z_\d]|$))[a-zA-Z_][a-zA-Z_\d]*",
         TokenType.NUMBER: r"\d+",
         TokenType.OPEN_BRACKET: r"\(",
         TokenType.CLOSE_BRACKET: r"\)",
@@ -95,6 +100,9 @@ class Lexer:
         TokenType.IF: r"if",
         TokenType.ELIF: r"elif",
         TokenType.ELSE: r"else",
+        TokenType.FUNC: r"func",
+        TokenType.LET: r"let",
+        TokenType.RETURN: r"return",
         TokenType.BOOL: r"true|false",
         TokenType.NOT: r"!(?=[^=])",
         TokenType.LT: r"<(?=[^=])",
