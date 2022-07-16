@@ -36,6 +36,12 @@ class BoolLiteral(Node):
         self.pos = value.pos
 
 
+class List(Node):
+    def __init__(self, items: Sequence[Node], pos: Position):
+        self.items: Sequence[Node] = items
+        self.pos = pos
+
+
 class NameRef(Node):
     def __init__(self, name: Token):
         self.name: Token = name
@@ -46,6 +52,13 @@ class FuncCall(Node):
     def __init__(self, func: Node, args: Sequence[Node], pos: Position):
         self.func: Node = func
         self.args: Sequence[Node] = tuple(args)
+        self.pos = pos
+
+
+class GetItem(Node):
+    def __init__(self, list_expr: Node, index: Node, pos: Position):
+        self.list: Node = list_expr
+        self.index: Node = index
         self.pos = pos
 
 

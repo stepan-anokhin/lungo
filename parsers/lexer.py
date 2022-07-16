@@ -11,10 +11,12 @@ class TokenType(enum.Enum):
     NEW_LINE = "NEW_LINE"
 
     # Structural
-    OPEN_CB = "OPEN_CB"
-    CLOSE_CB = "CLOSE_CB"
-    OPEN_BRACKET = "OPEN_BRACKET"
-    CLOSE_BRACKET = "CLOSE_BRACKET"
+    OPEN_CB = "OPEN_CB"  # {
+    CLOSE_CB = "CLOSE_CB"  # }
+    OPEN_BRACKET = "OPEN_BRACKET"  # (
+    CLOSE_BRACKET = "CLOSE_BRACKET"  # )
+    OPEN_SB = "OPEN_SB"  # [
+    CLOSE_SB = "CLOSE_SB"  # ]
     COMMA = "COMMA"
     SEMICOLON = "SEMICOLON"
     IF = "IF"
@@ -82,6 +84,8 @@ class Lexer:
         TokenType.CLOSE_BRACKET: r"\)",
         TokenType.OPEN_CB: r"\{",
         TokenType.CLOSE_CB: r"\}",
+        TokenType.OPEN_SB: r"\[",
+        TokenType.CLOSE_SB: r"\]",
         TokenType.COMMA: r",",
         TokenType.PLUS: r"\+",
         TokenType.MINUS: r"\-",

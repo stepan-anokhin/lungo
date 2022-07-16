@@ -25,10 +25,12 @@ class Parser:
         binary_arg[prio=n] = binary_expr[prio=n+1] | prefix_expr
         prefix_expr = '<unary_operator>' prefix_expr | postfix_expr
         postfix_expr = postfix_arg postfix_operation
-        postfix_arg = ( expr ) | cond | number | bool | name
-        postfix_operation = func_call
+        postfix_arg = ( expr ) | list | cond | number | bool | name
+        list = '[' expr_list ']'
+        postfix_operation = func_call | get_item
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
         func_call = '(' expr_list ')'
+        get_item = '[' expr ']'
         expr_list = expr | expr ',' expr_list
     """
 
@@ -145,17 +147,20 @@ class Parser:
 
     def postfix_operation(self, tokens: TokenStream, arg: ast.Node) -> ast.Node:
         """
-        postfix_operation = func_call
+        postfix_operation = func_call | get_item
         """
         if tokens.match(TokenType.OPEN_BRACKET):
             func_call = self.func_call(tokens, arg)
             return self.postfix_operation(tokens, func_call)
+        elif tokens.match(TokenType.OPEN_SB):
+            get_item = self.get_item(tokens, arg)
+            return self.postfix_operation(tokens, get_item)
         else:
             return arg
 
     def postfix_arg(self, tokens: TokenStream) -> ast.Node:
         """
-        postfix_arg = '(' expr ')' | cond | number | bool | name
+        postfix_arg = '(' expr ')' | list | cond | number | bool | name
         """
         try:
             if tokens.match(TokenType.OPEN_BRACKET):
@@ -174,6 +179,8 @@ class Parser:
                 return ast.NameRef(name)
             elif tokens.match(TokenType.IF):
                 return self.cond(tokens)
+            elif tokens.match(TokenType.OPEN_SB):
+                return self.list(tokens)
             else:
                 expected = (
                     TokenType.OPEN_BRACKET, TokenType.NUMBER,
@@ -183,16 +190,40 @@ class Parser:
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse postfix arg", reason=e)
 
+    def list(self, tokens: TokenStream) -> ast.Node:
+        """
+        list = '[' expr_list ']'
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.OPEN_SB)
+            items = self.expr_list(tokens, list_end=TokenType.CLOSE_SB)
+            tokens.take(TokenType.CLOSE_SB)
+            return ast.List(items, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse list", reason=e)
+
+    def get_item(self, tokens: TokenStream, list_expr: ast.Node) -> ast.Node:
+        """
+        get_item = '[' expr ']'
+        """
+        try:
+            tokens.take(TokenType.OPEN_SB)
+            index_expr = self.expr(tokens)
+            tokens.take(TokenType.CLOSE_SB)
+            return ast.GetItem(list_expr, index_expr, pos=list_expr.pos)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse get-item", reason=e)
+
     def func_call(self, tokens: TokenStream, func: ast.Node) -> ast.Node:
         """
         func_call = '(' expr_list ')' | '(' ')'
         """
         try:
-            start = tokens.current.pos
             tokens.take(TokenType.OPEN_BRACKET)
             args = self.expr_list(tokens, list_end=TokenType.CLOSE_BRACKET)
             tokens.take(TokenType.CLOSE_BRACKET)
-            return ast.FuncCall(func, args, pos=start)
+            return ast.FuncCall(func, args, pos=func.pos)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function call", reason=e)
 
