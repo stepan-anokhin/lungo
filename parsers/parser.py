@@ -47,7 +47,7 @@ class Parser:
     )
 
     # Supported unary operators
-    UNARY_OPERATORS = (TokenType.PLUS, TokenType.MINUS, TokenType.NOT)
+    UNARY_OPERATORS = (TokenType.MINUS, TokenType.NOT)
 
     def program(self, tokens: TokenStream, end_program: TokenSelector) -> ast.Node:
         """
@@ -236,7 +236,7 @@ class Parser:
             tokens.take(TokenType.CLOSE_SB)
             return ast.List(items, pos=start)
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse list", reason=e)
+            raise SyntacticError("Cannot parse list literal", reason=e)
 
     def get_item(self, tokens: TokenStream, list_expr: ast.Node) -> ast.Node:
         """
@@ -260,24 +260,21 @@ class Parser:
             tokens.take(TokenType.CLOSE_BRACKET)
             return ast.FuncCall(func, args, pos=func.pos)
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse function call", reason=e)
+            raise SyntacticError("Cannot parse function call operator", reason=e)
 
     def expr_list(self, tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[ast.Node]:
         """
         expr_list = expr | expr ',' expr_list
         """
-        try:
-            args = []
-            if not tokens.match(list_end):
-                arg = self.expr(tokens)
-                args.append(arg)
-            while not tokens.match(list_end):
-                tokens.take(TokenType.COMMA)
-                arg = self.expr(tokens)
-                args.append(arg)
-            return args
-        except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse expression list", reason=e)
+        args = []
+        if not tokens.match(list_end):
+            arg = self.expr(tokens)
+            args.append(arg)
+        while not tokens.match(list_end):
+            tokens.take(TokenType.COMMA)
+            arg = self.expr(tokens)
+            args.append(arg)
+        return args
 
     def func(self, tokens: TokenStream) -> ast.Node:
         """
@@ -302,18 +299,15 @@ class Parser:
         """
         name_list = name | name ',' name_list
         """
-        try:
-            names = []
-            if not tokens.match(list_end):
-                name = tokens.take(TokenType.NAME)
-                names.append(name)
-            while not tokens.match(list_end):
-                tokens.take(TokenType.COMMA)
-                name = tokens.take(TokenType.NAME)
-                names.append(name)
-            return names
-        except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse name list", reason=e)
+        names = []
+        if not tokens.match(list_end):
+            name = tokens.take(TokenType.NAME)
+            names.append(name)
+        while not tokens.match(list_end):
+            tokens.take(TokenType.COMMA)
+            name = tokens.take(TokenType.NAME)
+            names.append(name)
+        return names
 
     def cond(self, tokens: TokenStream) -> ast.Node:
         """
