@@ -1,9 +1,7 @@
-import operator as std
-
 import esperanto.ast as ast
 import esperanto.runtime as rt
-from esperanto.lexer import TokenType, Lexer
-from esperanto.parser import Parser
+from esperanto.lexer import TokenType, Lexer, Position
+from esperanto.parser import Parser, SyntacticError
 
 
 class InterpreterError(Exception):
@@ -12,29 +10,29 @@ class InterpreterError(Exception):
 
 class Interpreter:
     BINARY_OPERATORS = {
-        TokenType.PLUS: std.add,
-        TokenType.MINUS: std.sub,
-        TokenType.MUL: std.mul,
-        TokenType.DIV: std.truediv,
-        TokenType.LT: std.lt,
-        TokenType.LE: std.le,
-        TokenType.GT: std.gt,
-        TokenType.GE: std.ge,
-        TokenType.EQ: std.eq,
-        TokenType.AND: std.and_,
-        TokenType.OR: std.or_,
+        TokenType.PLUS: rt.Operators.plus,
+        TokenType.MINUS: rt.Operators.minus,
+        TokenType.MUL: rt.Operators.mul,
+        TokenType.DIV: rt.Operators.div,
+        TokenType.LT: rt.Operators.lt,
+        TokenType.LE: rt.Operators.le,
+        TokenType.GT: rt.Operators.gt,
+        TokenType.GE: rt.Operators.ge,
+        TokenType.EQ: rt.Operators.eq,
+        TokenType.AND: rt.Operators.and_,
+        TokenType.OR: rt.Operators.or_,
     }
 
     UNARY_OPERATORS = {
-        TokenType.MINUS: std.neg,
-        TokenType.NOT: std.not_,
+        TokenType.MINUS: rt.Operators.neg,
+        TokenType.NOT: rt.Operators.not_,
     }
 
-    def translate(self, node: ast.Node) -> rt.Program:
+    def translate(self, node: ast.Node) -> rt.ExecutableCode:
         if isinstance(node, ast.BoolLiteral):
-            return rt.Value(bool(node.value.text == "true"), node.pos)
+            return rt.Literal(rt.Bool.instance(node.value.text == "true"), node.pos)
         elif isinstance(node, ast.NumberLiteral):
-            return rt.Value(int(node.value.text), node.pos)
+            return rt.Literal(rt.Number(int(node.value.text)), node.pos)
         elif isinstance(node, ast.UnaryOperator):
             arg = self.translate(node.arg)
             return rt.Operator(self.UNARY_OPERATORS[node.operator.type], args=(arg,), pos=node.pos)
@@ -96,11 +94,33 @@ def main():
     interpreter = Interpreter()
 
     text = input()
+    global_scope = rt.Scope(symbols={
+        rt.Type.name: rt.Type.instance(),
+        rt.ListType.name: rt.ListType.instance(),
+        rt.BoolType.name: rt.BoolType.instance(),
+        rt.NumberType.name: rt.NumberType.instance(),
+        rt.StringType.name: rt.StringType.instance(),
+        rt.FunctionType.name: rt.FunctionType.instance()
+    })
     while text.strip() != "exit":
         tokens = lexer.tokens(text)
-        syntax_tree = parser.parse(tokens)
+        try:
+            syntax_tree = parser.parse(tokens)
+        except SyntacticError as e:
+            print(str(e))
+            text = input()
+            continue
+
         program = interpreter.translate(syntax_tree)
-        print(program.execute(rt.Context()))
+        context = rt.ExecutionContext(global_scope, rt.CallStack(Position("<stdin>", 0, 0, 0)))
+        try:
+            value = program.execute(context)
+        except rt.ExecutionError as error:
+            print(str(error))
+            text = input()
+            continue
+
+        print(repr(value))
         text = input()
 
 

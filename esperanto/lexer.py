@@ -57,12 +57,13 @@ class TokenType(enum.Enum):
 @dataclass
 class Position:
     """Position in source code."""
+    file: str  # File path
     abs: int  # Absolute position in characters
     line: int  # Line number
     in_line: int  # Position in line
 
     def __repr__(self):
-        return f"{self.abs}:{self.line}:{self.in_line}"
+        return f"{self.file}:{self.line}:{self.in_line}"
 
 
 class Token:
@@ -74,7 +75,7 @@ class Token:
         self.pos: Position = pos
 
     def __repr__(self):
-        return f"<{self.type.name} {repr(self.text)} at={self.pos}>"
+        return f"<{self.type.name} {repr(self.text)} {self.pos}>"
 
 
 class Lexer:
@@ -123,7 +124,7 @@ class Lexer:
         final_regex = "|".join(regex_entries)
         self.regex: re.Pattern = re.compile(final_regex)
 
-    def iter_tokens(self, text: str):
+    def iter_tokens(self, text: str, file: str = "<script>"):
         """Split text in tokens."""
         abs_pos, line_num, line_start = 0, 0, 0
         # Iterate over known patterns
@@ -135,12 +136,12 @@ class Lexer:
             # previous match and current match,
             # mark the skipped text as UNKNOWN
             if start != abs_pos:
-                skipped_pos = Position(abs_pos, line_num, abs_pos - line_start)
+                skipped_pos = Position(file, abs_pos, line_num, abs_pos - line_start)
                 yield Token(TokenType.UNKNOWN, text[abs_pos:start], skipped_pos)
 
             # Produce a new token
             token_type = TokenType[match.lastgroup]
-            yield Token(token_type, text[start:end], Position(start, line_num, start - line_start))
+            yield Token(token_type, text[start:end], Position(file, start, line_num, start - line_start))
 
             # Update position
             abs_pos = end
@@ -151,10 +152,10 @@ class Lexer:
         # Mark the remaining portion of the text as UNKNOWN
         # because it doesn't contain any known patterns
         if abs_pos != len(text):
-            yield Token(TokenType.UNKNOWN, text[abs_pos:], Position(abs_pos, line_num, abs_pos - line_start))
+            yield Token(TokenType.UNKNOWN, text[abs_pos:], Position(file, abs_pos, line_num, abs_pos - line_start))
 
         # Produce the END token when we processed entire text
-        yield Token(TokenType.END, '', Position(len(text), line_num, len(text) - line_start))
+        yield Token(TokenType.END, '', Position(file, len(text), line_num, len(text) - line_start))
 
     def tokens(self, text):
         return list(self.iter_tokens(text))
@@ -164,7 +165,7 @@ def main():
     lexer = Lexer()
     text = "hello\n   \n\nworld$$"
     while text.strip() not in ["\\q", "exit"]:
-        for token in lexer.iter_tokens(text):
+        for token in lexer.iter_tokens(text, "<stdin>"):
             print(token)
         text = input()
 
