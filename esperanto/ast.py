@@ -106,3 +106,10 @@ class Cond(Node):
         self.cond_blocks = tuple(cond_blocks)
         self.else_block = else_block
         self.pos = pos
+
+
+class GetAttr(Node):
+    def __init__(self, value: Node, attr: Token, pos: Position):
+        self.value: Node = value
+        self.attr: Token = attr
+        self.pos = pos

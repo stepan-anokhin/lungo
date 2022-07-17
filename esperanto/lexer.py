@@ -23,6 +23,7 @@ class TokenType(enum.Enum):
     ELIF = "ELIF"
     ELSE = "ELSE"
     FUNC = "FUNC"
+    DOT = "DOT"
 
     # Statements
     LET = "LET"
@@ -114,6 +115,7 @@ class Lexer:
         TokenType.NE: r"!=",
         TokenType.AND: r"&&",
         TokenType.OR: r"\|\|",
+        TokenType.DOT: r"\."
     }
 
     def __init__(self, patterns=None):

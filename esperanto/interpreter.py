@@ -84,6 +84,9 @@ class Interpreter:
         elif isinstance(node, ast.Block):
             statements = [self.translate(statement) for statement in node.statements]
             return rt.Block(statements, node.pos)
+        elif isinstance(node, ast.GetAttr):
+            value = self.translate(node.value)
+            return rt.GetAttr(value, node.attr.text, node.pos)
         else:
             raise InterpreterError(f"Unsupported syntax construct: {type(node)}")
 

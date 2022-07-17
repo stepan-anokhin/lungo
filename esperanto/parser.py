@@ -29,11 +29,12 @@ class Parser:
         postfix_expr = postfix_arg postfix_operation
         postfix_arg = ( expr ) | list | cond | number | bool | name
         list = '[' expr_list ']'
-        postfix_operation = func_call | get_item
+        postfix_operation = func_call | get_item | get_attr
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
         func = 'func' name ? '(' name_list ')' block
         func_call = '(' expr_list ')'
         get_item = '[' expr ']'
+        get_attr = '.' name
         expr_list = expr | expr ',' expr_list
     """
 
@@ -180,7 +181,7 @@ class Parser:
 
     def postfix_operation(self, tokens: TokenStream, arg: ast.Node) -> ast.Node:
         """
-        postfix_operation = func_call | get_item
+        postfix_operation = func_call | get_item | get_attr
         """
         if tokens.match(TokenType.OPEN_BRACKET):
             func_call = self.func_call(tokens, arg)
@@ -188,6 +189,9 @@ class Parser:
         elif tokens.match(TokenType.OPEN_SB):
             get_item = self.get_item(tokens, arg)
             return self.postfix_operation(tokens, get_item)
+        elif tokens.match(TokenType.DOT):
+            get_attr = self.get_attr(tokens, arg)
+            return self.postfix_operation(tokens, get_attr)
         else:
             return arg
 
@@ -261,6 +265,17 @@ class Parser:
             return ast.FuncCall(func, args, pos=func.pos)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function call operator", reason=e)
+
+    def get_attr(self, tokens: TokenStream, value: ast.Node) -> ast.Node:
+        """
+        get_attr = '.' name
+        """
+        try:
+            tokens.take(TokenType.DOT)
+            name = tokens.take(TokenType.NAME)
+            return ast.GetAttr(value, name, value.pos)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse get-attr operator", reason=e)
 
     def expr_list(self, tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[ast.Node]:
         """

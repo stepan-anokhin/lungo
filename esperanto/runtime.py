@@ -785,6 +785,19 @@ class GetItem(ExecutableCode):
         return coll.getitem(index, context, self.pos)
 
 
+class GetAttr(ExecutableCode):
+    """Get attribute by name."""
+
+    def __init__(self, value: ExecutableCode, attr: str, pos: Position):
+        self.value: ExecutableCode = value
+        self.attr: str = attr
+        self.pos = pos
+
+    def execute(self, context: ExecutionContext) -> Value:
+        value = self.value.execute(context)
+        return value.getattr(self.attr, context, self.pos)
+
+
 class Condition(ExecutableCode):
     """Conditional expression."""
 
