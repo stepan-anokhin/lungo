@@ -1,9 +1,9 @@
 import operator as std
 
-import parsers.ast as ast
-import parsers.runtime as rt
-from parsers.lexer import TokenType, Lexer
-from parsers.parser import Parser
+import esperanto.ast as ast
+import esperanto.runtime as rt
+from esperanto.lexer import TokenType, Lexer
+from esperanto.parser import Parser
 
 
 class InterpreterError(Exception):

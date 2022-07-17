@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "parsers"
+name = "esperanto"
 version = "0.1.0"
 description = ""
 authors = ["Stepan Anokhin <stepan.anokhin@gmail.com>"]

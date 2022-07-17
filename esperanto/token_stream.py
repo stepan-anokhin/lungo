@@ -1,6 +1,6 @@
 from typing import Collection, Union, Sequence, Iterator
 
-from parsers.lexer import Token, TokenType
+from esperanto.lexer import Token, TokenType
 
 TokenSelector = Union[TokenType, Collection[TokenType]]
 

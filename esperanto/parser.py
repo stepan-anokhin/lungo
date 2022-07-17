@@ -1,8 +1,8 @@
 from typing import Sequence, Optional
 
-import parsers.ast as ast
-from parsers.lexer import Token, TokenType, Lexer
-from parsers.token_stream import TokenStream, TokenSelector, UnexpectedToken
+import esperanto.ast as ast
+from esperanto.lexer import Token, TokenType, Lexer
+from esperanto.token_stream import TokenStream, TokenSelector, UnexpectedToken
 
 
 class SyntacticError(Exception):

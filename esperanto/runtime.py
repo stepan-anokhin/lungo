@@ -2,7 +2,9 @@ import abc
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence, Optional, Dict
 
-from parsers.lexer import Position
+from esperanto.lexer import Position
+
+
 
 
 class Context:
