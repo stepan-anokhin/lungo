@@ -114,7 +114,7 @@ class Parser:
             start = tokens.current.pos
             tokens.take(TokenType.LET)
             name = tokens.take(TokenType.NAME)
-            tokens.take(TokenType.EQ)
+            tokens.take(TokenType.ASSIGN)
             value = self.expr(tokens)
             return ast.DefineVar(name, value, pos=start)
         except UnexpectedToken as e:
