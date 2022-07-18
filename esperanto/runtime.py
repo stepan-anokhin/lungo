@@ -56,7 +56,7 @@ class Scope:
 
     def assign(self, name: str, value):
         if name in self._symbols:
-            self._symbols = value
+            self._symbols[name] = value
         elif self.parent is not None:
             self.parent.assign(name, value)
         else:
@@ -326,6 +326,32 @@ class Bool(Value):
 
     def __repr__(self):
         return f"{self.type.name}({str(self)})"
+
+
+class NilType(Type):
+    """Type for 'nil' value."""
+    name: str = 'Nil'
+
+
+class Nil(Value):
+    """Nil value."""
+    type = NilType
+    instance: "Nil"
+
+    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+        """Convert to string."""
+        return String(str(self))
+
+    @staticmethod
+    def is_truthy() -> bool:
+        """Check if the value is truthy."""
+        return False
+
+    def __repr__(self):
+        return "nil"
+
+
+Nil.instance = Nil()
 
 
 class NumberType(Type):
@@ -818,6 +844,21 @@ class Condition(ExecutableCode):
                 return branch.body.execute(context.nested())
         if self.else_block is not None:
             return self.else_block.execute(context.nested())
+
+
+class While(ExecutableCode):
+    """While loop."""
+
+    def __init__(self, cond: ExecutableCode, body: ExecutableCode, pos: Position):
+        self.cond: ExecutableCode = cond
+        self.body: ExecutableCode = body
+        self.pos = pos
+
+    def execute(self, context: ExecutionContext) -> Value:
+        value = Nil.instance
+        while self.cond.execute(context).is_truthy():
+            value = self.body.execute(context)
+        return value
 
 
 class Return(ExecutableCode):

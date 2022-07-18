@@ -197,7 +197,7 @@ class Parser:
 
     def postfix_arg(self, tokens: TokenStream) -> ast.Node:
         """
-        postfix_arg = '(' expr ')' | list | cond | func | number | bool | name
+        postfix_arg = '(' expr ')' | list | cond | while | func | number | bool | name
         """
         try:
             if tokens.match(TokenType.OPEN_BRACKET):
@@ -216,6 +216,8 @@ class Parser:
                 return ast.NameRef(name)
             elif tokens.match(TokenType.IF):
                 return self.cond(tokens)
+            elif tokens.match(TokenType.WHILE):
+                return self.while_loop(tokens)
             elif tokens.match(TokenType.FUNC):
                 return self.func(tokens)
             elif tokens.match(TokenType.OPEN_SB):
@@ -308,6 +310,20 @@ class Parser:
             return ast.FuncExpr(name, arg_names, body, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse function expression", reason=e)
+
+    def while_loop(self, tokens: TokenStream) -> ast.Node:
+        """
+        while = 'while' '(' expr ')' block
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.WHILE, TokenType.OPEN_BRACKET)
+            cond = self.expr(tokens)
+            tokens.take(TokenType.CLOSE_BRACKET)
+            body = self.block(tokens)
+            return ast.While(cond, body, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse while loop.", reason=e)
 
     @staticmethod
     def name_list(tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[Token]:

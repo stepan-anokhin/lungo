@@ -50,6 +50,10 @@ class Interpreter:
             if node.else_block is not None:
                 else_block = self.translate(node.else_block)
             return rt.Condition(branches, else_block, node.pos)
+        elif isinstance(node, ast.While):
+            cond = self.translate(node.cond)
+            body = self.translate(node.body)
+            return rt.While(cond, body, node.pos)
         elif isinstance(node, ast.NameRef):
             return rt.NameRef(node.name.text, node.pos)
         elif isinstance(node, ast.FuncExpr):
@@ -103,7 +107,9 @@ def main():
         rt.BoolType.name: rt.BoolType.instance(),
         rt.NumberType.name: rt.NumberType.instance(),
         rt.StringType.name: rt.StringType.instance(),
-        rt.FunctionType.name: rt.FunctionType.instance()
+        rt.FunctionType.name: rt.FunctionType.instance(),
+        rt.NilType.name: rt.NilType,
+        "nil": rt.Nil.instance,
     })
     while text.strip() != "exit":
         tokens = lexer.tokens(text)

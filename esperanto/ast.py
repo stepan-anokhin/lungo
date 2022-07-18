@@ -108,6 +108,13 @@ class Cond(Node):
         self.pos = pos
 
 
+class While(Node):
+    def __init__(self, cond: Node, body: Node, pos: Position):
+        self.cond: Node = cond
+        self.body: Node = body
+        self.pos = pos
+
+
 class GetAttr(Node):
     def __init__(self, value: Node, attr: Token, pos: Position):
         self.value: Node = value
