@@ -33,6 +33,9 @@ class Interpreter:
             return rt.Literal(rt.Bool.instance(node.value.text == "true"), node.pos)
         elif isinstance(node, ast.NumberLiteral):
             return rt.Literal(rt.Number(int(node.value.text)), node.pos)
+        elif isinstance(node, ast.StringLiteral):
+            text = self._unescape_string(node.value.text)
+            return rt.Literal(rt.String(text), node.pos)
         elif isinstance(node, ast.UnaryOperator):
             arg = self.translate(node.arg)
             return rt.Operator(self.UNARY_OPERATORS[node.operator.type], args=(arg,), pos=node.pos)
@@ -73,9 +76,14 @@ class Interpreter:
                 items.append(self.translate(item))
             return rt.ListExpr(items, node.pos)
         elif isinstance(node, ast.GetItem):
-            list_expr = self.translate(node.list)
-            index = self.translate(node.index)
-            return rt.GetItem(list_expr, index, node.pos)
+            coll = self.translate(node.coll)
+            key = self.translate(node.key)
+            return rt.GetItem(coll, key, node.pos)
+        elif isinstance(node, ast.SetItem):
+            coll = self.translate(node.coll)
+            key = self.translate(node.key)
+            value = self.translate(node.value)
+            return rt.SetItem(coll, key, value, node.pos)
         elif isinstance(node, ast.Assign):
             value = self.translate(node.value)
             return rt.Assign(node.name.text, value, node.pos)
@@ -91,8 +99,18 @@ class Interpreter:
         elif isinstance(node, ast.GetAttr):
             value = self.translate(node.value)
             return rt.GetAttr(value, node.attr.text, node.pos)
+        elif isinstance(node, ast.SetAttr):
+            target = self.translate(node.target)
+            attr = node.attr.text
+            value = self.translate(node.value)
+            return rt.SetAttr(target, attr, value, node.pos)
         else:
             raise InterpreterError(f"Unsupported syntax construct: {type(node)}")
+
+    @staticmethod
+    def _unescape_string(value: str) -> str:
+        """Unescape string literal."""
+        return value[1:-1].encode('utf-8').decode("unicode_escape")
 
 
 def main():

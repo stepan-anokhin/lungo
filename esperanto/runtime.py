@@ -165,6 +165,10 @@ class Value:
         """Get collection element by index."""
         raise ExecutionError(f"Can't get item from {self.type.name}", context.stack, pos)
 
+    def setitem(self, key: "Value", value: "Value", context: ExecutionContext, pos: Position) -> "Value":
+        """Set collection item."""
+        raise ExecutionError(f"Can't set item on the {self.type.name}", context.stack, pos)
+
     def call(self, arguments: Sequence["Value"], context: ExecutionContext, pos: Position) -> "Value":
         """Invoke-function operator."""
         raise ExecutionError(f"{self.type.name} is not callable", context.stack, pos)
@@ -174,6 +178,10 @@ class Value:
         if name == "type":
             return self.type
         raise ExecutionError(f"{self.type.name} doesn't have attribute '{name}'", context.stack, pos)
+
+    def setattr(self, name: str, value: "Value", context: ExecutionContext, pos: Position) -> "Value":
+        """Set-attribute operator."""
+        raise ExecutionError(f"Cannot set attribute '{name}' on {self.type.name}", context.stack, pos)
 
     def to_bool(self, context: ExecutionContext, pos: Position) -> "Bool":
         """Converto to boolean."""
@@ -251,25 +259,27 @@ class Operators:
 
 class Type(Value):
     """Value type."""
-    _instance: "Type"
     name: str = "Type"
 
     def __init__(self):
-        self.type = self
+        if type(self) is Type:
+            self.type = self
+        else:
+            self.type = Type.instance()
 
     @classmethod
     def instance(cls) -> "Type":
-        if not hasattr(cls, "_instance") or cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        if "__instance" not in cls.__dict__:
+            setattr(cls, "__instance", cls())
+        return getattr(cls, "__instance")
+
+    def __repr__(self):
+        return self.name
 
     def getattr(self, name: str, context: ExecutionContext, pos: Position) -> "Value":
         if name == "name":
             return String(self.name)
-        super().getattr(name, context, pos)
-
-    def __repr__(self):
-        return self.name
+        return super().getattr(name, context, pos)
 
 
 class BoolType(Type):
@@ -335,7 +345,7 @@ class NilType(Type):
 
 class Nil(Value):
     """Nil value."""
-    type = NilType
+    type = NilType.instance()
     instance: "Nil"
 
     def to_str(self, context: ExecutionContext, pos: Position) -> "String":
@@ -521,7 +531,7 @@ class ListType(Type):
 
 class ListValue(Value):
     """List value."""
-    type = ListType
+    type = ListType.instance()
 
     def __init__(self, items: List[Value]):
         self.items: List[Value] = items
@@ -569,9 +579,16 @@ class ListValue(Value):
         return Bool.instance(False)
 
     def getitem(self, key: Value, context: ExecutionContext, pos: Position) -> Value:
-        """Get collection element by index."""
+        """Get list element by index."""
         if isinstance(key, Number):
             return self.items[int(key.value)]
+        raise ExecutionError(f"{ListType.name} indices must be {NumberType.name}", context.stack, pos)
+
+    def setitem(self, key: Value, value: Value, context: ExecutionContext, pos: Position) -> Value:
+        """Set list item."""
+        if isinstance(key, Number):
+            self.items[int(key.value)] = value
+            return value
         raise ExecutionError(f"{ListType.name} indices must be {NumberType.name}", context.stack, pos)
 
     def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
@@ -615,12 +632,13 @@ class ExecutableCode(abc.ABC):
     pos: Position
 
     @abc.abstractmethod
-    def execute(self, context: ExecutionContext) -> "Value":
+    def execute(self, context: ExecutionContext) -> Value:
         """Execute code."""
 
 
 class Function(Value):
     """Function value."""
+    type = FunctionType.instance()
 
     def __init__(self, name: Optional[str], arg_names: Sequence[str], body: ExecutableCode, lexical_context: Scope):
         self.name: Optional[str] = name
@@ -641,7 +659,7 @@ class Function(Value):
         finally:
             context.stack.pop()
 
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> "Value":
+    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
         """Get-attribute operator."""
         if name == "name":
             return String(self.name or "")
@@ -800,15 +818,31 @@ class ListExpr(ExecutableCode):
 class GetItem(ExecutableCode):
     """Get item expression."""
 
-    def __init__(self, coll: ExecutableCode, index: ExecutableCode, pos: Position):
+    def __init__(self, coll: ExecutableCode, key: ExecutableCode, pos: Position):
         self.coll: ExecutableCode = coll
-        self.index: ExecutableCode = index
+        self.key: ExecutableCode = key
         self.pos = pos
 
     def execute(self, context: ExecutionContext) -> Value:
         coll = self.coll.execute(context)
-        index = self.index.execute(context)
-        return coll.getitem(index, context, self.pos)
+        key = self.key.execute(context)
+        return coll.getitem(key, context, self.pos)
+
+
+class SetItem(ExecutableCode):
+    """Set collection item."""
+
+    def __init__(self, coll: ExecutableCode, key: ExecutableCode, value: ExecutableCode, pos: Position):
+        self.coll: ExecutableCode = coll
+        self.key: ExecutableCode = key
+        self.value: ExecutableCode = value
+        self.pos = pos
+
+    def execute(self, context: ExecutionContext) -> Value:
+        coll = self.coll.execute(context)
+        key = self.key.execute(context)
+        value = self.value.execute(context)
+        return coll.setitem(key, value, context, self.pos)
 
 
 class GetAttr(ExecutableCode):
@@ -822,6 +856,22 @@ class GetAttr(ExecutableCode):
     def execute(self, context: ExecutionContext) -> Value:
         value = self.value.execute(context)
         return value.getattr(self.attr, context, self.pos)
+
+
+class SetAttr(ExecutableCode):
+    """Set attribute."""
+
+    def __init__(self, target: ExecutableCode, attr: str, value: ExecutableCode, pos: Position):
+        self.target: ExecutableCode = target
+        self.attr: str = attr
+        self.value: ExecutableCode = value
+        self.pos = pos
+
+    def execute(self, context: ExecutionContext) -> Value:
+        target = self.target.execute(context)
+        value = self.value.execute(context)
+        target.setattr(self.attr, value, context, self.pos)
+        return value
 
 
 class Condition(ExecutableCode):
@@ -871,3 +921,7 @@ class Return(ExecutableCode):
     def execute(self, context: ExecutionContext):
         value = self.value.execute(context)
         raise _Returned(value)
+
+
+if __name__ == '__main__':
+    print(BoolType.instance())

@@ -1,7 +1,7 @@
 from typing import Sequence, Optional
 
 import esperanto.ast as ast
-from esperanto.lexer import Token, TokenType, Lexer
+from esperanto.lexer import Token, TokenType, Lexer, Position
 from esperanto.token_stream import TokenStream, TokenSelector, UnexpectedToken
 
 
@@ -40,6 +40,7 @@ class Parser:
 
     # Binary operators from the lowest priority to the highest
     BINARY_OPERATORS = (
+        (TokenType.ASSIGN,),
         (TokenType.OR,),
         (TokenType.AND,),
         (TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE, TokenType.EQ),
@@ -83,29 +84,14 @@ class Parser:
 
     def statement(self, tokens: TokenStream) -> ast.Node:
         """
-        statement = assign | define | ret | expr
+        statement = define | ret | expr
         """
-        if tokens.match(TokenType.NAME, TokenType.ASSIGN):
-            return self.assign(tokens)
-        elif tokens.match(TokenType.LET):
+        if tokens.match(TokenType.LET):
             return self.define_var(tokens)
         elif tokens.match(TokenType.RETURN):
             return self.ret(tokens)
         else:
             return self.expr(tokens)
-
-    def assign(self, tokens: TokenStream) -> ast.Node:
-        """
-        assign = name '=' expr
-        """
-        try:
-            start = tokens.current.pos
-            name = tokens.take(TokenType.NAME)
-            tokens.take(TokenType.ASSIGN)
-            expr = self.expr(tokens)
-            return ast.Assign(name, expr, pos=start)
-        except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse assignment", reason=e)
 
     def define_var(self, tokens: TokenStream) -> ast.Node:
         """
@@ -148,8 +134,22 @@ class Parser:
         while tokens.match(self.BINARY_OPERATORS[priority]):
             operator = tokens.take(self.BINARY_OPERATORS[priority])
             right_arg = self.binary_arg(tokens, priority)
-            expr = ast.BinaryOperator(operator, expr, right_arg, pos=start)
+            expr = self._binary_operator(operator, expr, right_arg, pos=start)
         return expr
+
+    @staticmethod
+    def _binary_operator(operator: Token, left: ast.Node, right: ast.Node, pos: Position) -> ast.Node:
+        """"""
+        if operator.type == TokenType.ASSIGN:
+            if isinstance(left, ast.NameRef):
+                return ast.Assign(name=left.name, value=right, pos=pos)
+            elif isinstance(left, ast.GetItem):
+                return ast.SetItem(coll=left.coll, key=left.key, value=right, pos=pos)
+            elif isinstance(left, ast.GetAttr):
+                return ast.SetAttr(target=left.value, attr=left.attr, value=right, pos=pos)
+            else:
+                raise SyntacticError(f"Cannot assign to {type(left)}", UnexpectedToken(operator, expected=()))
+        return ast.BinaryOperator(operator, left, right, pos)
 
     def binary_arg(self, tokens: TokenStream, priority: int = 0) -> ast.Node:
         """
@@ -211,6 +211,9 @@ class Parser:
             elif tokens.match(TokenType.BOOL):
                 value = tokens.take(TokenType.BOOL)
                 return ast.BoolLiteral(value)
+            elif tokens.match(TokenType.STRING):
+                value = tokens.take(TokenType.STRING)
+                return ast.StringLiteral(value)
             elif tokens.match(TokenType.NAME):
                 name = tokens.take(TokenType.NAME)
                 return ast.NameRef(name)

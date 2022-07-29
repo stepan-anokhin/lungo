@@ -34,6 +34,7 @@ class TokenType(enum.Enum):
     NUMBER = "NUMBER"
     NAME = "NAME"
     BOOL = "BOOL"
+    STRING = "STRING"
 
     # Complex expressions
     PLUS = "PLUS"
@@ -117,7 +118,8 @@ class Lexer:
         TokenType.NE: r"!=",
         TokenType.AND: r"&&",
         TokenType.OR: r"\|\|",
-        TokenType.DOT: r"\."
+        TokenType.DOT: r"\.",
+        TokenType.STRING: r"\"(:?(:?\\.)|[^\\\"])*\""
     }
 
     def __init__(self, patterns=None):

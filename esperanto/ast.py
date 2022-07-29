@@ -36,6 +36,12 @@ class BoolLiteral(Node):
         self.pos = value.pos
 
 
+class StringLiteral(Node):
+    def __init__(self, value: Token):
+        self.value: Token = value
+        self.pos = value.pos
+
+
 class List(Node):
     def __init__(self, items: Sequence[Node], pos: Position):
         self.items: Sequence[Node] = items
@@ -57,8 +63,8 @@ class FuncCall(Node):
 
 class GetItem(Node):
     def __init__(self, list_expr: Node, index: Node, pos: Position):
-        self.list: Node = list_expr
-        self.index: Node = index
+        self.coll: Node = list_expr
+        self.key: Node = index
         self.pos = pos
 
 
@@ -119,4 +125,20 @@ class GetAttr(Node):
     def __init__(self, value: Node, attr: Token, pos: Position):
         self.value: Node = value
         self.attr: Token = attr
+        self.pos = pos
+
+
+class SetAttr(Node):
+    def __init__(self, target: Node, attr: Token, value: Node, pos: Position):
+        self.target: Node = target
+        self.value: Node = value
+        self.attr: Token = attr
+        self.pos = pos
+
+
+class SetItem(Node):
+    def __init__(self, coll: Node, key: Node, value: Node, pos: Position):
+        self.coll: Node = coll
+        self.key: Node = key
+        self.value: Node = value
         self.pos = pos
