@@ -119,7 +119,7 @@ class Lexer:
         TokenType.AND: r"&&",
         TokenType.OR: r"\|\|",
         TokenType.DOT: r"\.",
-        TokenType.STRING: r"\"(:?(:?\\.)|[^\\\"])*\""
+        TokenType.STRING: r"(:?\"(:?(:?\\.)|[^\\\"])*\")|(:?'(:?(:?\\.)|[^\\\'])*')"
     }
 
     def __init__(self, patterns=None):
