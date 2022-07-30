@@ -118,7 +118,6 @@ def main():
     parser = Parser()
     interpreter = Interpreter()
 
-    text = input()
     global_scope = rt.Scope(symbols={
         rt.Type.name: rt.Type.instance(),
         rt.ListType.name: rt.ListType.instance(),
@@ -128,14 +127,17 @@ def main():
         rt.FunctionType.name: rt.FunctionType.instance(),
         rt.NilType.name: rt.NilType,
         "nil": rt.Nil.instance,
+        "prompt": rt.String(">>> "),
     })
+
+    text = input(global_scope.deref("prompt"))
     while text.strip() != "exit":
         tokens = lexer.tokens(text)
         try:
             syntax_tree = parser.parse(tokens)
         except SyntacticError as e:
             print(str(e))
-            text = input()
+            text = input(global_scope.deref("prompt"))
             continue
 
         program = interpreter.translate(syntax_tree)
@@ -144,11 +146,11 @@ def main():
             value = program.execute(context)
         except rt.ExecutionError as error:
             print(str(error))
-            text = input()
+            text = input(global_scope.deref("prompt"))
             continue
 
         print(repr(value))
-        text = input()
+        text = input(global_scope.deref("prompt"))
 
 
 if __name__ == '__main__':

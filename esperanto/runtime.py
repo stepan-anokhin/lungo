@@ -291,27 +291,21 @@ class Bool(Value):
     """Boolean value."""
     type = BoolType.instance()
 
-    _TRUE: "Bool"
-    _FALSE: "Bool"
+    true: "Bool"
+    false: "Bool"
 
     def __init__(self, value: bool):
         self.value: bool = value
 
     @staticmethod
     def instance(value: bool) -> "Bool":
-        if value:
-            if not hasattr(Bool, "_TRUE") or Bool._TRUE is None:
-                Bool._TRUE = Bool(True)
-            return Bool._TRUE
-        if not hasattr(Bool, "_FALSE") or Bool._FALSE is None:
-            Bool._FALSE = Bool(False)
-        return Bool._FALSE
+        return Bool.true if value else Bool.false
 
     def eq(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Equality operator."""
         if isinstance(other, Bool):
             return Bool.instance(self.value == other.value)
-        return Bool.instance(False)
+        return Bool.false
 
     def to_bool(self, context: ExecutionContext, pos: Position) -> "Bool":
         """Converto to boolean."""
@@ -336,6 +330,10 @@ class Bool(Value):
 
     def __repr__(self):
         return f"{self.type.name}({str(self)})"
+
+
+Bool.true = Bool(True)
+Bool.false = Bool(False)
 
 
 class NilType(Type):
@@ -422,7 +420,7 @@ class Number(Value):
         """Equality operator."""
         if isinstance(other, Number):
             return Bool.instance(self.value == other.value)
-        return Bool.instance(False)
+        return Bool.false
 
     def neg(self, context: ExecutionContext, pos: Position) -> Value:
         """Negation unary operator."""
@@ -495,7 +493,7 @@ class String(Value):
         """Equality operator."""
         if isinstance(other, String):
             return Bool.instance(self.value == other.value)
-        return Bool.instance(False)
+        return Bool.false
 
     def getitem(self, key: Value, context: ExecutionContext, pos: Position) -> Value:
         """Get collection element by index."""
@@ -507,7 +505,7 @@ class String(Value):
         """Get-attribute operator."""
         if name == "length":
             return Number(len(self.value))
-        super().getattr(name, context, pos)
+        return super().getattr(name, context, pos)
 
     def to_str(self, context: ExecutionContext, pos: Position) -> "String":
         """Convert to string."""
@@ -576,7 +574,7 @@ class ListValue(Value):
         """Equality operator."""
         if isinstance(other, ListValue):
             return Bool.instance(self.items == other.items)
-        return Bool.instance(False)
+        return Bool.false
 
     def getitem(self, key: Value, context: ExecutionContext, pos: Position) -> Value:
         """Get list element by index."""
@@ -921,7 +919,3 @@ class Return(ExecutableCode):
     def execute(self, context: ExecutionContext):
         value = self.value.execute(context)
         raise _Returned(value)
-
-
-if __name__ == '__main__':
-    print(BoolType.instance())
