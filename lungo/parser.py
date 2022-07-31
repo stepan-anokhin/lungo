@@ -64,10 +64,12 @@ class Parser:
                 statement = self.statement(tokens)
                 statements.append(statement)
 
-            while not tokens.match(end_program):
+            while not tokens.match(end_program) and not tokens.match(TokenType.SEMICOLON, end_program):
                 tokens.take(TokenType.SEMICOLON)
                 statement = self.statement(tokens)
                 statements.append(statement)
+            if tokens.match(TokenType.SEMICOLON):
+                tokens.take(TokenType.SEMICOLON)
             return ast.Block(statements, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse code block", reason=e)
@@ -236,7 +238,7 @@ class Parser:
                 )
                 raise UnexpectedToken(tokens.current, expected)
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse postfix arg", reason=e)
+            raise SyntacticError("Cannot parse expression", reason=e)
 
     def list(self, tokens: TokenStream) -> ast.Node:
         """
@@ -261,7 +263,7 @@ class Parser:
             tokens.take(TokenType.CLOSE_SB)
             return ast.GetItem(list_expr, index_expr, pos=list_expr.pos)
         except UnexpectedToken as e:
-            raise SyntacticError("Cannot parse get-item", reason=e)
+            raise SyntacticError("Cannot parse get-item operator", reason=e)
 
     def func_call(self, tokens: TokenStream, func: ast.Node) -> ast.Node:
         """
