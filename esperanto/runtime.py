@@ -1,6 +1,7 @@
 import abc
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Sequence, Union, Callable
+from functools import cached_property
+from typing import Optional, Dict, List, Sequence, Union, Callable, Any
 
 from esperanto.lexer import Position
 
@@ -105,6 +106,21 @@ class Value:
     """Parent class for all values."""
     type: "Type"
 
+    @cached_property
+    def attrs(self) -> "AttributeHolder":
+        """Get attributes."""
+        attrs = self._make_attributes()
+        self._define_attributes(attrs)
+        return attrs
+
+    def _make_attributes(self) -> "AttributeHolder":
+        """Make attributes."""
+        return AttributeHolder(self, can_set_unknown=False)
+
+    def _define_attributes(self, attrs: "AttributeHolder"):
+        """Define existing attributes."""
+        attrs.define(type=Const(self.type))
+
     def plus(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
         """Plus operator."""
         raise ExecutionError(f"Can't add to {self.type.name}", context.stack, pos)
@@ -175,13 +191,11 @@ class Value:
 
     def getattr(self, name: str, context: ExecutionContext, pos: Position) -> "Value":
         """Get-attribute operator."""
-        if name == "type":
-            return self.type
-        raise ExecutionError(f"{self.type.name} doesn't have attribute '{name}'", context.stack, pos)
+        return self.attrs.get_value(name, context, pos)
 
     def setattr(self, name: str, value: "Value", context: ExecutionContext, pos: Position) -> "Value":
         """Set-attribute operator."""
-        raise ExecutionError(f"Cannot set attribute '{name}' on {self.type.name}", context.stack, pos)
+        return self.attrs.set_value(name, value, context, pos)
 
     def to_bool(self, context: ExecutionContext, pos: Position) -> "Bool":
         """Converto to boolean."""
@@ -199,6 +213,112 @@ class Value:
     def is_truthy() -> bool:
         """Check if the value is truthy."""
         return True
+
+
+class Attribute(abc.ABC):
+
+    @abc.abstractmethod
+    def get(self) -> Value:
+        """Get attribute value."""
+
+    @abc.abstractmethod
+    def set(self, value: Value) -> Value:
+        """Set attribute value."""
+
+    @abc.abstractmethod
+    def can_set(self) -> bool:
+        """Check if setting the attribute is allowed."""
+
+
+class SetAttributeError(Exception):
+    """Can't set attribute on object."""
+
+
+class GetAttributeError(Exception):
+    """Can't get attribute of object."""
+
+
+class Const(Attribute):
+    def __init__(self, value: Value):
+        self.value: Value = value
+
+    def get(self) -> Value:
+        return self.value
+
+    def set(self, value: Value) -> Value:
+        raise SetAttributeError()
+
+    def can_set(self) -> bool:
+        return False
+
+
+Getter = Callable[[], Value]
+Setter = Callable[[Value], Value]
+
+
+class Property(Attribute):
+    def __init__(self, getter: Getter, setter: Optional[Setter] = None):
+        self._getter: Getter = getter
+        self._setter: Optional[Setter] = setter
+
+    def get(self) -> Value:
+        return self._getter()
+
+    def set(self, value: Value) -> Value:
+        if self._setter is None:
+            raise SetAttributeError()
+        return self._setter(value)
+
+    def can_set(self) -> bool:
+        return self._setter is not None
+
+
+AttributeValue = Union[Attribute, Value]
+
+
+class AttributeHolder:
+    """Attribute holder."""
+
+    def __init__(self, instance: Value, can_set_unknown: bool = False):
+        self._attributes: Dict[str, AttributeValue] = {}
+        self._instance: Value = instance
+        self._can_set_unknown: bool = can_set_unknown
+
+    def get_value(self, name: str, context: ExecutionContext, pos: Position) -> Value:
+        """Get attribute value."""
+        if name not in self._attributes:
+            raise ExecutionError(f"'{self._instance.type}' object has no attribute '{name}'", context.stack, pos)
+        attribute_value = self._attributes[name]
+        if isinstance(attribute_value, Value):
+            return attribute_value
+        if isinstance(attribute_value, Attribute):
+            try:
+                return attribute_value.get()
+            except GetAttributeError:
+                raise ExecutionError(
+                    f"Can't get attribute '{name}' of '{self._instance.type}' object", context.stack, pos)
+
+    def set_value(self, name: str, value: Value, context: ExecutionContext, pos: Position) -> Value:
+        """Set attribute value."""
+        if name not in self._attributes and not self._can_set_unknown:
+            raise ExecutionError(f"Can't set attribute '{name}' on '{self._instance.type}'", context.stack, pos)
+        if name not in self._attributes:
+            self._attributes[name] = value
+            return value
+        attribute_value = self._attributes[name]
+        if isinstance(attribute_value, Value):
+            self._attributes[name] = value
+            return value
+        if not attribute_value.can_set():
+            raise ExecutionError(f"Can't set attribute '{name}' on '{self._instance.type}'", context.stack, pos)
+        try:
+            attribute_value.set(value)
+        except SetAttributeError:
+            raise ExecutionError(f"Can't set attribute '{name}' on '{self._instance.type}'", context.stack, pos)
+
+    def define(self, **declarations: AttributeValue):
+        """Define attributes."""
+        self._attributes.update(declarations)
 
 
 class Operators:
@@ -267,6 +387,10 @@ class Type(Value):
         else:
             self.type = Type.instance()
 
+    def _define_attributes(self, attrs: AttributeHolder):
+        super()._define_attributes(attrs)
+        attrs.define(name=Const(from_py(self.name)))
+
     @classmethod
     def instance(cls) -> "Type":
         if "__instance" not in cls.__dict__:
@@ -275,11 +399,6 @@ class Type(Value):
 
     def __repr__(self):
         return self.name
-
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> "Value":
-        if name == "name":
-            return String(self.name)
-        return super().getattr(name, context, pos)
 
 
 class BoolType(Type):
@@ -453,6 +572,10 @@ class String(Value):
     def __init__(self, value: str):
         self.value: str = value
 
+    def _define_attributes(self, attrs: AttributeHolder):
+        super()._define_attributes(attrs)
+        attrs.define(size=Const(from_py(len(self.value))))
+
     def plus(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Plus operator."""
         if isinstance(other, String):
@@ -501,12 +624,6 @@ class String(Value):
             return String(self.value[int(key.value)])
         raise ExecutionError(f"{String.type.name} indices must be {NumberType.name}", context.stack, pos)
 
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
-        """Get-attribute operator."""
-        if name == "length":
-            return Number(len(self.value))
-        return super().getattr(name, context, pos)
-
     def to_str(self, context: ExecutionContext, pos: Position) -> "String":
         """Convert to string."""
         return self
@@ -533,6 +650,10 @@ class ListValue(Value):
 
     def __init__(self, items: List[Value]):
         self.items: List[Value] = items
+
+    def _define_attributes(self, attrs: AttributeHolder):
+        super()._define_attributes(attrs)
+        attrs.define(size=Property(getter=self.size))
 
     def plus(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Plus operator."""
@@ -589,12 +710,6 @@ class ListValue(Value):
             return value
         raise ExecutionError(f"{ListType.name} indices must be {NumberType.name}", context.stack, pos)
 
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
-        """Get-attribute operator."""
-        if name == "length":
-            return Number(len(self.items))
-        return super().getattr(name, context, pos)
-
     def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
         items = ", ".join(item.to_str(context, pos).value for item in self.items)
@@ -604,6 +719,9 @@ class ListValue(Value):
         """Check if the value is truthy."""
         return len(self.items) > 0
 
+    def size(self) -> Number:
+        return Number(len(self.items))
+
     def __str__(self):
         items = ", ".join(str(item) for item in self.items)
         return f"[{items}]"
@@ -611,6 +729,23 @@ class ListValue(Value):
     def __repr__(self):
         items = ", ".join(repr(item) for item in self.items)
         return f"[{items}]"
+
+
+def from_py(value: Any) -> Value:
+    """Convert py object to Value."""
+    if isinstance(value, Value):
+        return value
+    if isinstance(value, str):
+        return String(value)
+    if value is None:
+        return Nil.instance
+    if isinstance(value, bool):
+        return Bool.instance(value)
+    if isinstance(value, (int, float)):
+        return Number(value)
+    if isinstance(value, (list, tuple)):
+        return ListValue([from_py(item) for item in value])
+    raise ValueError(f"Cannot convert {type(value)} to Value")
 
 
 class FunctionType(Type):
@@ -644,6 +779,13 @@ class Function(Value):
         self.body: ExecutableCode = body
         self.lexical_context: Scope = lexical_context
 
+    def _define_attributes(self, attrs: AttributeHolder):
+        super()._define_attributes(attrs)
+        attrs.define(
+            name=Const(from_py(self.name)),
+            args=Const(from_py(self.arg_names))
+        )
+
     def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
         """Invoke-function operator."""
         if len(arguments) != len(self.arg_names):
@@ -656,12 +798,6 @@ class Function(Value):
             return returned.value
         finally:
             context.stack.pop()
-
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
-        """Get-attribute operator."""
-        if name == "name":
-            return String(self.name or "")
-        return super().getattr(name, context, pos)
 
     def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
@@ -692,7 +828,7 @@ class Operator(ExecutableCode):
 class Literal(ExecutableCode):
     """Constant value."""
 
-    def __init__(self, value: Value, pos: Position) -> None:
+    def __init__(self, value: Value, pos: Position):
         self.value: Value = value
         self.pos = pos
 
@@ -756,7 +892,7 @@ class Block(ExecutableCode):
         self.pos = pos
 
     def execute(self, context: ExecutionContext) -> Value:
-        value = None
+        value = Nil.instance
         for statement in self.statements:
             value = statement.execute(context)
         return value
