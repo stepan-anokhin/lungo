@@ -121,6 +121,14 @@ class While(Node):
         self.pos = pos
 
 
+class For(Node):
+    def __init__(self, name: Token, iterable: Node, body: Node, pos: Position):
+        self.name: Token = name
+        self.iterable: Node = iterable
+        self.body: Node = body
+        self.pos = pos
+
+
 class GetAttr(Node):
     def __init__(self, value: Node, attr: Token, pos: Position):
         self.value: Node = value

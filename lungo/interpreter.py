@@ -6,6 +6,29 @@ from lungo.lexer import Lexer
 from lungo.parser import Parser, SyntacticError
 from lungo.translator import Translator
 
+"""
+class Person(Parent) {
+    const name;
+    const age;
+    
+
+    constructor(name, age) {
+        this.name = name
+        this.age = age
+    };
+    
+    say_hello() {
+        print
+    }
+}
+
+
+"""
+
+
+def print_one(value: rt.Value):
+    print(value)
+
 
 class Interpreter:
     def __init__(self, lexer: Optional[Lexer] = None, parser: Optional[Parser] = None,
@@ -26,6 +49,7 @@ class Interpreter:
             rt.FunctionType.name: rt.FunctionType.instance(),
             rt.NilType.name: rt.NilType,
             "nil": rt.Nil.instance,
+            "print": rt.PyFunc(print_one),
             **custom_vars
         })
 

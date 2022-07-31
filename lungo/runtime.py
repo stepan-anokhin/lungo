@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import inspect
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Optional, Dict, List, Sequence, Union, Callable, Any
@@ -197,6 +198,10 @@ class Value:
         """Set-attribute operator."""
         return self.attrs.set_value(name, value, context, pos)
 
+    def hasattr(self, name: str, context: ExecutionContext, pos: Position) -> Bool:
+        """Check if attribute exists."""
+        return Bool.instance(self.attrs.exists(name))
+
     def to_bool(self, context: ExecutionContext, pos: Position) -> Bool:
         """Converto to boolean."""
         return Bool.instance(self.is_truthy())
@@ -318,6 +323,10 @@ class AttributeHolder:
             attribute_value.set(value)
         except SetAttributeError:
             raise ExecutionError(f"Can't set attribute '{name}' on '{self._instance.type}'", context.stack, pos)
+
+    def exists(self, name: str) -> bool:
+        """Check if the attribute exists."""
+        return name in self._attributes
 
     def define(self, **declarations: AttributeValue):
         """Define attributes."""
@@ -601,6 +610,9 @@ class ListValue(Value):
     def _define_attributes(self, attrs: AttributeHolder):
         super()._define_attributes(attrs)
         attrs.define(size=Property(getter=self.size))
+        attrs.define(**{
+            IterableMethods.ITER: PyFunc(self.iter),
+        })
 
     def plus(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Plus operator."""
@@ -669,6 +681,10 @@ class ListValue(Value):
     def size(self) -> Number:
         return Number(len(self.items))
 
+    def iter(self) -> ListIter:
+        """Get iterator."""
+        return ListIter(self.items)
+
     def __str__(self):
         items = ", ".join(str(item) for item in self.items)
         return f"[{items}]"
@@ -676,6 +692,39 @@ class ListValue(Value):
     def __repr__(self):
         items = ", ".join(repr(item) for item in self.items)
         return f"[{items}]"
+
+
+class ListIterType(Type):
+    """Type for ListIter"""
+    name: str = "ListIter"
+
+
+class ListIter(Value):
+    """List iterator."""
+    type: Type = ListIterType.instance()
+
+    def __init__(self, items: Sequence[Value]):
+        self.items: Sequence[Value] = items
+        self.index: int = 0
+
+    def _define_attributes(self, attrs: AttributeHolder):
+        super()._define_attributes(attrs)
+        attrs.define(**{
+            IterableMethods.HAS_NEXT: PyFunc(self.has_next),
+            IterableMethods.NEXT: PyFunc(self.next),
+        })
+
+    def has_next(self) -> bool:
+        """Check if collection has next item."""
+        return self.index < len(self.items)
+
+    def next(self) -> Value:
+        """Get next value and move iterator."""
+        if self.index >= len(self.items):
+            raise RuntimeError("Iterator reached the end of the list.")
+        value = self.items[self.index]
+        self.index += 1
+        return value
 
 
 def from_py(value: Any) -> Value:
@@ -693,6 +742,19 @@ def from_py(value: Any) -> Value:
     if isinstance(value, (list, tuple)):
         return ListValue([from_py(item) for item in value])
     raise ValueError(f"Cannot convert {type(value)} to Value")
+
+
+def to_py(value: Any) -> Any:
+    """Convert from lungo value to py object."""
+    if not isinstance(value, Value):
+        return value
+    if isinstance(value, Nil):
+        return None
+    if isinstance(value, (String, Bool, Number)):
+        return value.value
+    if isinstance(value, ListValue):
+        return value.items
+    raise ValueError(f"Cannot convert {value.type.name} to python object")
 
 
 class FunctionType(Type):
@@ -716,15 +778,13 @@ class ExecutableCode(abc.ABC):
         """Execute code."""
 
 
-class Function(Value):
-    """Function value."""
+class BasicFunction(Value, abc.ABC):
+    """Base class for user-defined function and built-in functions."""
     type = FunctionType.instance()
 
-    def __init__(self, name: Optional[str], arg_names: Sequence[str], body: ExecutableCode, lexical_context: Scope):
+    def __init__(self, name: Optional[str], arg_names: Sequence[str]):
         self.name: Optional[str] = name
         self.arg_names: Sequence[str] = arg_names
-        self.body: ExecutableCode = body
-        self.lexical_context: Scope = lexical_context
 
     def _define_attributes(self, attrs: AttributeHolder):
         super()._define_attributes(attrs)
@@ -732,6 +792,28 @@ class Function(Value):
             name=Const(from_py(self.name)),
             args=Const(from_py(self.arg_names))
         )
+
+    @abc.abstractmethod
+    def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
+        """Invoke-function operator."""
+
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
+        """Convert to string."""
+        return String(repr(self))
+
+    def __repr__(self):
+        name = self.name or "func"
+        args = ', '.join(self.arg_names)
+        return f"{name}({args})"
+
+
+class Function(BasicFunction):
+    """Function value."""
+
+    def __init__(self, name: Optional[str], arg_names: Sequence[str], body: ExecutableCode, lexical_context: Scope):
+        super().__init__(name, arg_names)
+        self.body: ExecutableCode = body
+        self.lexical_context: Scope = lexical_context
 
     def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
         """Invoke-function operator."""
@@ -746,14 +828,23 @@ class Function(Value):
         finally:
             context.stack.pop()
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> String:
-        """Convert to string."""
-        return String(repr(self))
 
-    def __repr__(self):
-        name = self.name or "func"
-        args = ', '.join(self.arg_names)
-        return f"{name}({args})"
+class PyFunc(BasicFunction):
+    def __init__(self, func: Callable):
+        args = tuple(inspect.signature(func).parameters.keys())
+        name = func.__name__
+        self.func: Callable = func
+        super().__init__(name=name, arg_names=args)
+
+    def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
+        if len(arguments) != len(self.arg_names):
+            raise ExecutionError(f"Wrong number of arguments to call {repr(self)}", context.stack, pos)
+        try:
+            arguments = tuple(to_py(arg) for arg in arguments)
+            ret_value = self.func(*arguments)
+            return from_py(ret_value)
+        except Exception as e:
+            raise ExecutionError(str(e), context.stack, pos)
 
 
 class Operator(ExecutableCode):
@@ -992,6 +1083,40 @@ class While(ExecutableCode):
         return value
 
 
+class IterableMethods:
+    """Special method names of iterable."""
+    ITER = "iter"
+    HAS_NEXT = "has_next"
+    NEXT = "next"
+
+
+class For(ExecutableCode):
+    """For loop."""
+
+    def __init__(self, name: str, iterable: ExecutableCode, body: ExecutableCode, pos: Position):
+        self.name: str = name
+        self.iterable: ExecutableCode = iterable
+        self.body: ExecutableCode = body
+        self.pos = pos
+
+    def execute(self, context: ExecutionContext) -> Value:
+        iterable = self.iterable.execute(context)
+        if not iterable.hasattr(IterableMethods.ITER, context, self.iterable.pos):
+            raise ExecutionError("For loop argument must be iterable.", context.stack, self.iterable.pos)
+        iterator = iterable.getattr(IterableMethods.ITER, context, self.iterable.pos).call((), context, self.pos)
+        has_next = iterator.getattr(IterableMethods.HAS_NEXT, context, self.pos)
+        get_next = iterator.getattr(IterableMethods.NEXT, context, self.pos)
+
+        ret_value = Nil.instance
+        context = context.nested()
+        context.scope.define(self.name, Nil.instance)
+        while has_next.call((), context, self.pos).is_truthy():
+            iter_value = get_next.call((), context, self.pos)
+            context.scope.assign(self.name, iter_value)
+            ret_value = self.body.execute(context)
+        return ret_value
+
+
 class Return(ExecutableCode):
     """Return statement."""
 
@@ -1002,3 +1127,24 @@ class Return(ExecutableCode):
     def execute(self, context: ExecutionContext):
         value = self.value.execute(context)
         raise _Returned(value)
+
+
+BuiltinFunc = Callable[[Sequence[Value], ExecutionContext, Position], Value]
+
+
+def builtin(args: Sequence[str], name: Optional[str] = None) -> Callable[[BuiltinFunc], BasicFunction]:
+    """Convenience decorator to create built-in function."""
+
+    def decorator(func: BuiltinFunc) -> BasicFunction:
+        func_name = name or func.__name__
+
+        class BuiltinFunction(BasicFunction):
+            def __init__(self):
+                super().__init__(name=func_name, arg_names=args)
+
+            def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
+                return func(arguments, context, pos)
+
+        return BuiltinFunction()
+
+    return decorator

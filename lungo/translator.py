@@ -1,7 +1,6 @@
 import lungo.ast as ast
 import lungo.runtime as rt
-from lungo.lexer import TokenType, Lexer, Position
-from lungo.parser import Parser, SyntacticError
+from lungo.lexer import TokenType, Position
 
 
 class InterpreterError(Exception):
@@ -113,6 +112,10 @@ class Translator:
             cond = self.translate(node.cond)
             body = self.translate(node.body)
             return rt.While(cond, body, node.pos)
+        elif isinstance(node, ast.For):
+            iterable = self.translate(node.iterable)
+            body = self.translate(node.body)
+            return rt.For(node.name.text, iterable, body, node.pos)
         elif isinstance(node, ast.NameRef):
             return rt.NameRef(node.name.text, node.pos)
         elif isinstance(node, ast.FuncExpr):

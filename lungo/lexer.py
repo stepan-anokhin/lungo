@@ -21,6 +21,8 @@ class TokenType(enum.Enum):
     SEMICOLON = "SEMICOLON"
     IF = "IF"
     WHILE = "WHILE"
+    FOR = "FOR"
+    IN = "IN"
     ELIF = "ELIF"
     ELSE = "ELSE"
     FUNC = "FUNC"
@@ -87,7 +89,8 @@ class Lexer:
         TokenType.SPACE: r"[ \t]+",
         TokenType.NEW_LINE: r"\n",
         TokenType.SEMICOLON: r";",
-        TokenType.NAME: r"(?!(?:true|false|if|elif|else|func|let|return|while)([^a-zA-Z_\d]|$))[a-zA-Z_][a-zA-Z_\d]*",
+        TokenType.NAME: r"(?!(?:true|false|if|elif|else|func|let|return|while|for|in)"
+                        r"([^a-zA-Z_\d]|$))[a-zA-Z_][a-zA-Z_\d]*",
         TokenType.NUMBER: r"\d+",
         TokenType.OPEN_BRACKET: r"\(",
         TokenType.CLOSE_BRACKET: r"\)",
@@ -105,6 +108,8 @@ class Lexer:
         TokenType.ELIF: r"elif",
         TokenType.ELSE: r"else",
         TokenType.WHILE: r"while",
+        TokenType.FOR: r"for",
+        TokenType.IN: r"in",
         TokenType.FUNC: r"func",
         TokenType.LET: r"let",
         TokenType.RETURN: r"return",

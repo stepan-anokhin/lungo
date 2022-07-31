@@ -27,10 +27,12 @@ class Parser:
         binary_arg[prio=n] = binary_expr[prio=n+1] | prefix_expr
         prefix_expr = '<unary_operator>' prefix_expr | postfix_expr
         postfix_expr = postfix_arg postfix_operation
-        postfix_arg = ( expr ) | list | cond | number | bool | name
+        postfix_arg = ( expr ) | list | cond | while | for | func | number | bool | name
         list = '[' expr_list ']'
         postfix_operation = func_call | get_item | get_attr
         cond = 'if' '(' expr ')' block ( 'elif' '(' expr ')' block )* ('else' block )?
+        while = 'while' '(' expr ')' block
+        for = 'for' '(' name 'in' expr ')' block
         func = 'func' name ? '(' name_list ')' block
         func_call = '(' expr_list ')'
         get_item = '[' expr ']'
@@ -197,7 +199,7 @@ class Parser:
 
     def postfix_arg(self, tokens: TokenStream) -> ast.Node:
         """
-        postfix_arg = '(' expr ')' | list | cond | while | func | number | bool | name
+        postfix_arg = '(' expr ')' | list | cond | while | for | func | number | bool | name
         """
         try:
             if tokens.match(TokenType.OPEN_BRACKET):
@@ -221,6 +223,8 @@ class Parser:
                 return self.cond(tokens)
             elif tokens.match(TokenType.WHILE):
                 return self.while_loop(tokens)
+            elif tokens.match(TokenType.FOR):
+                return self.for_loop(tokens)
             elif tokens.match(TokenType.FUNC):
                 return self.func(tokens)
             elif tokens.match(TokenType.OPEN_SB):
@@ -327,6 +331,22 @@ class Parser:
             return ast.While(cond, body, pos=start)
         except UnexpectedToken as e:
             raise SyntacticError("Cannot parse while loop.", reason=e)
+
+    def for_loop(self, tokens: TokenStream) -> ast.Node:
+        """
+        for = 'for' '(' name 'in' expr ')' block
+        """
+        try:
+            start = tokens.current.pos
+            tokens.take(TokenType.FOR, TokenType.OPEN_BRACKET)
+            name = tokens.take(TokenType.NAME)
+            tokens.take(TokenType.IN)
+            iterable = self.expr(tokens)
+            tokens.take(TokenType.CLOSE_BRACKET)
+            body = self.block(tokens)
+            return ast.For(name, iterable, body, pos=start)
+        except UnexpectedToken as e:
+            raise SyntacticError("Cannot parse for loop.", reason=e)
 
     @staticmethod
     def name_list(tokens: TokenStream, list_end: TokenSelector = TokenType.CLOSE_BRACKET) -> Sequence[Token]:
