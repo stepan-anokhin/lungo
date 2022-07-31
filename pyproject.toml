@@ -5,7 +5,7 @@ description = ""
 authors = ["Stepan Anokhin <stepan.anokhin@gmail.com>"]
 include = ["README.md"]
 homepage = "https://github.com/stepan-anokhin/lungo"
-repository = "git@github.com:stepan-anokhin/lungo.git"
+repository = "https://github.com/stepan-anokhin/lungo"
 readme = "README.md"
 
 [tool.poetry.dependencies]
