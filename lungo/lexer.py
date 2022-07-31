@@ -130,7 +130,7 @@ class Lexer:
         final_regex = "|".join(regex_entries)
         self.regex: re.Pattern = re.compile(final_regex)
 
-    def iter_tokens(self, text: str, file: str = "<script>"):
+    def iter_tokens(self, text: str, file: str = "<code>"):
         """Split text in tokens."""
         abs_pos, line_num, line_start = 0, 0, 0
         # Iterate over known patterns
@@ -163,8 +163,8 @@ class Lexer:
         # Produce the END token when we processed entire text
         yield Token(TokenType.END, '', Position(file, len(text), line_num, len(text) - line_start))
 
-    def tokens(self, text):
-        return list(self.iter_tokens(text))
+    def tokens(self, text: str, file: str = "<code>"):
+        return list(self.iter_tokens(text, file))
 
 
 def main():

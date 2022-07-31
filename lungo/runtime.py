@@ -324,62 +324,6 @@ class AttributeHolder:
         self._attributes.update(declarations)
 
 
-class Operators:
-    """Supported operators as static functions."""
-
-    @staticmethod
-    def plus(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.plus(b, context, pos)
-
-    @staticmethod
-    def minus(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.minus(b, context, pos)
-
-    @staticmethod
-    def mul(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.mul(b, context, pos)
-
-    @staticmethod
-    def div(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.div(b, context, pos)
-
-    @staticmethod
-    def lt(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.lt(b, context, pos)
-
-    @staticmethod
-    def le(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.le(b, context, pos)
-
-    @staticmethod
-    def gt(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.gt(b, context, pos)
-
-    @staticmethod
-    def ge(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.ge(b, context, pos)
-
-    @staticmethod
-    def eq(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.eq(b, context, pos)
-
-    @staticmethod
-    def and_(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.and_(b, context, pos)
-
-    @staticmethod
-    def or_(context: ExecutionContext, pos: Position, a: Value, b: Value) -> Value:
-        return a.or_(b, context, pos)
-
-    @staticmethod
-    def neg(context: ExecutionContext, pos: Position, a: Value) -> Value:
-        return a.neg(context, pos)
-
-    @staticmethod
-    def not_(context: ExecutionContext, pos: Position, a: Value) -> Value:
-        return a.not_(context, pos)
-
-
 class Type(Value):
     """Value type."""
     name: str = "Type"
