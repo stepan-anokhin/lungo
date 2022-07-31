@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Sequence, Optional
 
-from esperanto.lexer import Position, Token
+from lungo.lexer import Position, Token
 
 
 class Node:

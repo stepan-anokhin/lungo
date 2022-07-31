@@ -1,7 +1,7 @@
-import esperanto.ast as ast
-import esperanto.runtime as rt
-from esperanto.lexer import TokenType, Lexer, Position
-from esperanto.parser import Parser, SyntacticError
+import lungo.ast as ast
+import lungo.runtime as rt
+from lungo.lexer import TokenType, Lexer, Position
+from lungo.parser import Parser, SyntacticError
 
 
 class InterpreterError(Exception):

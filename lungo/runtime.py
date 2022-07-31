@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Optional, Dict, List, Sequence, Union, Callable, Any
 
-from esperanto.lexer import Position
+from lungo.lexer import Position
 
 
 class CallStack:

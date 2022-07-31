@@ -1,8 +1,8 @@
 from typing import Sequence, Optional
 
-import esperanto.ast as ast
-from esperanto.lexer import Token, TokenType, Lexer, Position
-from esperanto.token_stream import TokenStream, TokenSelector, UnexpectedToken
+import lungo.ast as ast
+from lungo.lexer import Token, TokenType, Lexer, Position
+from lungo.token_stream import TokenStream, TokenSelector, UnexpectedToken
 
 
 class SyntacticError(Exception):

@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "esperanto"
+name = "lungo"
 version = "0.1.0"
 description = ""
 authors = ["Stepan Anokhin <stepan.anokhin@gmail.com>"]
@@ -10,7 +10,7 @@ python = "^3.8"
 [tool.poetry.dev-dependencies]
 
 [tool.poetry.scripts]
-esperanto = 'esperanto.interpreter:main'
+lungo = 'lungo.interpreter:main'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
