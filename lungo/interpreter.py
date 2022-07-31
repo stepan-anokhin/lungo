@@ -10,7 +10,7 @@ from prompt_toolkit.styles import style_from_pygments_cls, Style
 from pygments.styles.monokai import MonokaiStyle
 
 import lungo.runtime as rt
-from lungo.lexer import Lexer
+from lungo.lexer import Lexer, Position
 from lungo.parser import Parser, SyntacticError
 from lungo.prompt import PromptLexer, Prompt
 from lungo.sources_cache import SourceCache
@@ -45,9 +45,9 @@ class Interpreter:
         })
 
     @staticmethod
-    def make_context(scope: rt.Scope, code: rt.ExecutableCode) -> rt.ExecutionContext:
+    def make_context(scope: rt.Scope) -> rt.ExecutionContext:
         """Create execution context."""
-        return rt.ExecutionContext(scope, rt.CallStack(code.pos))
+        return rt.ExecutionContext(scope, rt.CallStack())
 
     def translate_sources(self, sources: str, filename: str) -> rt.ExecutableCode:
         """Convert sources to executable code."""
@@ -60,11 +60,16 @@ class Interpreter:
         """Print stack-trace."""
         print("Stack trace:", file=output)
         for frame in error.stack:
-            print(f"  In file '{frame.pos.file}', line {frame.pos.line}", file=output)
-            if sources is not None:
-                line = sources.get_line(frame.pos)
-                print(f"    {line.lstrip()}")
+            Interpreter.print_stack_entry(frame.pos, sources=sources, output=output)
+        Interpreter.print_stack_entry(error.pos, sources=sources, output=output)
         print(f"{type(error).__name__}: {str(error)}")
+
+    @staticmethod
+    def print_stack_entry(pos: Position, sources: Optional[SourceCache] = None, output: TextIO = sys.stderr):
+        print(f"  In file '{pos.file}', line {pos.line}", file=output)
+        if sources is not None:
+            line = sources.get_line(pos)
+            print(f"    {line.lstrip()}", file=output)
 
     @staticmethod
     def print_syntactic_error(error: SyntacticError, output: TextIO = sys.stderr,
@@ -111,7 +116,7 @@ class Interpreter:
                 command_key = f"<command:{command_count}>"
                 sources.add(text=command, filename=command_key, can_evict=False)
                 code = self.translate_sources(command, command_key)
-                context = self.make_context(global_scope, code)
+                context = self.make_context(global_scope)
                 value = code.execute(context)
                 print(repr(value), file=output)
             except SyntacticError as error:
@@ -132,7 +137,7 @@ class Interpreter:
             text = sources.get(path)
             code = self.translate_sources(text, path)
             global_scope = self.make_global_scope()
-            context = self.make_context(global_scope, code)
+            context = self.make_context(global_scope)
             code.execute(context)
         except SyntacticError as error:
             self.print_syntactic_error(error, sources=sources)
