@@ -2,6 +2,10 @@
 
 `Lungo` is a dynamic programming language created just for fun.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/stepan-anokhin/lungo/blob/master/LICENSE)
+[![PyPI Version](https://img.shields.io/pypi/v/lungo.svg)](https://pypi.org/project/lungo/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/lungo.svg)](https://pypi.org/project/lungo/)
+
 ## Getting Started
 
 Installations:
