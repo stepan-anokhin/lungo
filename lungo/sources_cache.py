@@ -114,7 +114,7 @@ class SourceCache:
         """Get line in the file."""
         text = self.get(pos.file)
         try:
-            start = text.rindex("\n", 0, pos.abs)
+            start = text.rindex("\n", 0, pos.abs) + 1
         except ValueError:
             start = 0
         try:

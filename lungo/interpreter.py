@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Optional, TextIO
+from typing import Optional, TextIO, Sequence
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.input import create_input
@@ -66,6 +66,18 @@ class Interpreter:
                 print(f"    {line.lstrip()}")
         print(f"{type(error).__name__}: {str(error)}")
 
+    @staticmethod
+    def print_syntactic_error(error: SyntacticError, output: TextIO = sys.stderr,
+                              sources: Optional[SourceCache] = None):
+        """Print syntactic error."""
+        token = error.reason.actual
+        pos = token.pos
+        print(f"In file '{pos.file}', line {pos.line}", file=output)
+        if sources is not None:
+            print("  " + sources.get_line(pos), file=output)
+            print("  " + " " * pos.in_line + "^" * len(token.text), file=output)
+        print(f"Syntactic Error: {str(error)}", file=output)
+
     def make_prompt(
             self,
             prompt_lexer: Optional[PromptLexer] = None,
@@ -103,7 +115,7 @@ class Interpreter:
                 value = code.execute(context)
                 print(repr(value), file=output)
             except SyntacticError as error:
-                print(str(error), file=err_output)
+                self.print_syntactic_error(error, output=err_output, sources=sources)
             except rt.ExecutionError as error:
                 self.print_stacktrace(error, output=err_output, sources=sources)
 
@@ -113,11 +125,34 @@ class Interpreter:
             except (EOFError, KeyboardInterrupt):
                 break
 
+    def exec_file(self, path: str):
+        """Execute file."""
+        sources = SourceCache()
+        try:
+            text = sources.get(path)
+            code = self.translate_sources(text, path)
+            global_scope = self.make_global_scope()
+            context = self.make_context(global_scope, code)
+            code.execute(context)
+        except SyntacticError as error:
+            self.print_syntactic_error(error, sources=sources)
+            sys.exit(-1)
+        except rt.ExecutionError as error:
+            self.print_stacktrace(error, sources=sources)
+            sys.exit(-1)
 
-def main():
+
+def main(args: Optional[Sequence[str]] = None):
+    args = args or sys.argv
     interpreter = Interpreter()
-    interpreter.repl()
+    if len(args) == 1:
+        interpreter.repl()
+    elif len(args) == 2:
+        interpreter.exec_file(args[1])
+    else:
+        print("Usage:", file=sys.stderr)
+        print("  lungo [FILE]", file=sys.stderr)
 
 
 if __name__ == '__main__':
-    main()
+    main(["", "/home/stepan/PycharmProjects/parsers/main.lg"])
