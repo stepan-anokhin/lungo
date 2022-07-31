@@ -1,8 +1,36 @@
-package = []
+[[package]]
+name = "prompt-toolkit"
+version = "3.0.30"
+description = "Library for building powerful interactive command lines in Python"
+category = "main"
+optional = false
+python-versions = ">=3.6.2"
+
+[package.dependencies]
+wcwidth = "*"
+
+[[package]]
+name = "pygments"
+version = "2.12.0"
+description = "Pygments is a syntax highlighting package written in Python."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "wcwidth"
+version = "0.2.5"
+description = "Measures the displayed width of unicode strings in a terminal"
+category = "main"
+optional = false
+python-versions = "*"
 
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "fafb334cb038533f851c23d0b63254223abf72ce4f02987e7064b0c95566699a"
+content-hash = "89ea0c82ac05b2c8a50ea634884a8b3952e4b5d233fbff62328971627d3b8d16"
 
 [metadata.files]
+prompt-toolkit = []
+pygments = []
+wcwidth = []

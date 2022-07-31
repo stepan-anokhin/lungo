@@ -830,9 +830,11 @@ class Function(BasicFunction):
 
 
 class PyFunc(BasicFunction):
-    def __init__(self, func: Callable):
+    """Wrapper around a pure python (i.e. lungo-agnostic) function."""
+
+    def __init__(self, func: Callable, name: Optional[str] = None):
         args = tuple(inspect.signature(func).parameters.keys())
-        name = func.__name__
+        name = name or func.__name__
         self.func: Callable = func
         super().__init__(name=name, arg_names=args)
 
