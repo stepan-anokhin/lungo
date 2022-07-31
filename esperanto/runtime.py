@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import abc
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Optional, Dict, List, Sequence, Union, Callable, Any
 
 from esperanto.lexer import Position
-
-SymbolTable = Dict[str, "Value"]
 
 
 class CallStack:
@@ -50,7 +50,7 @@ class NameRedefined(ScopeError):
 class Scope:
     """Hierarchy of lexical scopes, a table of known variable names."""
 
-    def __init__(self, symbols: Optional[SymbolTable] = None, parent: Optional["Scope"] = None):
+    def __init__(self, symbols: Optional[SymbolTable] = None, parent: Optional[Scope] = None):
         symbols = symbols or {}
         self._symbols: SymbolTable = {**symbols}
         self.parent: Optional[Scope] = parent
@@ -76,7 +76,7 @@ class Scope:
         else:
             raise UndefinedName(name)
 
-    def nested(self, symbols: Optional[SymbolTable] = None) -> "Scope":
+    def nested(self, symbols: Optional[SymbolTable] = None) -> Scope:
         return Scope(symbols=symbols, parent=self)
 
 
@@ -85,7 +85,7 @@ class ExecutionContext:
         self.scope: Scope = scope
         self.stack: CallStack = stack
 
-    def nested(self, symbols: Optional[SymbolTable] = None) -> "ExecutionContext":
+    def nested(self, symbols: Optional[SymbolTable] = None) -> ExecutionContext:
         """Create execution context with nested lexical scope."""
         return ExecutionContext(self.scope.nested(symbols), self.stack)
 
@@ -104,108 +104,108 @@ class ExecutionError(Exception):
 
 class Value:
     """Parent class for all values."""
-    type: "Type"
+    type: Type
 
     @cached_property
-    def attrs(self) -> "AttributeHolder":
+    def attrs(self) -> AttributeHolder:
         """Get attributes."""
         attrs = self._make_attributes()
         self._define_attributes(attrs)
         return attrs
 
-    def _make_attributes(self) -> "AttributeHolder":
+    def _make_attributes(self) -> AttributeHolder:
         """Make attributes."""
         return AttributeHolder(self, can_set_unknown=False)
 
-    def _define_attributes(self, attrs: "AttributeHolder"):
+    def _define_attributes(self, attrs: AttributeHolder):
         """Define existing attributes."""
         attrs.define(type=Const(self.type))
 
-    def plus(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def plus(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Plus operator."""
         raise ExecutionError(f"Can't add to {self.type.name}", context.stack, pos)
 
-    def minus(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def minus(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Minus operator."""
         raise ExecutionError(f"Can't subtract from {self.type.name}", context.stack, pos)
 
-    def mul(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def mul(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Multiplication operator."""
         raise ExecutionError(f"Can't multiply {self.type.name}", context.stack, pos)
 
-    def div(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def div(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Division operator."""
         raise ExecutionError(f"Can't divide {self.type.name}", context.stack, pos)
 
-    def le(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def le(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Lesser-equal operator."""
         raise ExecutionError(f"Can't check {self.type.name} is lesser than or equal to other value", context.stack, pos)
 
-    def lt(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def lt(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Lesser-than operator."""
         raise ExecutionError(f"Can't check if {self.type.name} is lesser than other value", context.stack, pos)
 
-    def ge(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def ge(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Greater-equal operator."""
         raise ExecutionError(f"Can't check if {self.type.name} greater or equal to other value", context.stack, pos)
 
-    def gt(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def gt(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Greater-than operator."""
         raise ExecutionError(f"Can't check if {self.type.name} is greater than other value", context.stack, pos)
 
-    def eq(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def eq(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Equality operator."""
         return Bool.instance(self is other)
 
-    def and_(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def and_(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Logical-and operator."""
         if self.is_truthy():
             return other
         return self
 
-    def or_(self, other: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def or_(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
         """Logical-or operator."""
         if self.is_truthy():
             return self
         return other
 
-    def not_(self, context: ExecutionContext, pos: Position) -> "Value":
+    def not_(self, context: ExecutionContext, pos: Position) -> Value:
         """Logical-not unary operator."""
         return Bool.instance(not self.is_truthy())
 
-    def neg(self, context: ExecutionContext, pos: Position) -> "Value":
+    def neg(self, context: ExecutionContext, pos: Position) -> Value:
         """Negation unary operator."""
         raise ExecutionError(f"Can't negate {self.type.name}", context.stack, pos)
 
-    def getitem(self, key: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def getitem(self, key: Value, context: ExecutionContext, pos: Position) -> Value:
         """Get collection element by index."""
         raise ExecutionError(f"Can't get item from {self.type.name}", context.stack, pos)
 
-    def setitem(self, key: "Value", value: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def setitem(self, key: Value, value: Value, context: ExecutionContext, pos: Position) -> Value:
         """Set collection item."""
         raise ExecutionError(f"Can't set item on the {self.type.name}", context.stack, pos)
 
-    def call(self, arguments: Sequence["Value"], context: ExecutionContext, pos: Position) -> "Value":
+    def call(self, arguments: Sequence[Value], context: ExecutionContext, pos: Position) -> Value:
         """Invoke-function operator."""
         raise ExecutionError(f"{self.type.name} is not callable", context.stack, pos)
 
-    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> "Value":
+    def getattr(self, name: str, context: ExecutionContext, pos: Position) -> Value:
         """Get-attribute operator."""
         return self.attrs.get_value(name, context, pos)
 
-    def setattr(self, name: str, value: "Value", context: ExecutionContext, pos: Position) -> "Value":
+    def setattr(self, name: str, value: Value, context: ExecutionContext, pos: Position) -> Value:
         """Set-attribute operator."""
         return self.attrs.set_value(name, value, context, pos)
 
-    def to_bool(self, context: ExecutionContext, pos: Position) -> "Bool":
+    def to_bool(self, context: ExecutionContext, pos: Position) -> Bool:
         """Converto to boolean."""
         return Bool.instance(self.is_truthy())
 
-    def to_num(self, context: ExecutionContext, pos: Position) -> "Number":
+    def to_num(self, context: ExecutionContext, pos: Position) -> Number:
         """Convert to number."""
         raise ExecutionError(f"Can't convert {self.type.name} to {NumberType.name}", context.stack, pos)
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
         raise ExecutionError(f"Can't convert {self.type.name} to {StringType.name}", context.stack, pos)
 
@@ -213,6 +213,9 @@ class Value:
     def is_truthy() -> bool:
         """Check if the value is truthy."""
         return True
+
+
+SymbolTable = Dict[str, Value]
 
 
 class Attribute(abc.ABC):
@@ -410,14 +413,14 @@ class Bool(Value):
     """Boolean value."""
     type = BoolType.instance()
 
-    true: "Bool"
-    false: "Bool"
+    true: Bool
+    false: Bool
 
     def __init__(self, value: bool):
         self.value: bool = value
 
     @staticmethod
-    def instance(value: bool) -> "Bool":
+    def instance(value: bool) -> Bool:
         return Bool.true if value else Bool.false
 
     def eq(self, other: Value, context: ExecutionContext, pos: Position) -> Value:
@@ -426,17 +429,17 @@ class Bool(Value):
             return Bool.instance(self.value == other.value)
         return Bool.false
 
-    def to_bool(self, context: ExecutionContext, pos: Position) -> "Bool":
+    def to_bool(self, context: ExecutionContext, pos: Position) -> Bool:
         """Converto to boolean."""
         return self
 
-    def to_num(self, context: ExecutionContext, pos: Position) -> "Number":
+    def to_num(self, context: ExecutionContext, pos: Position) -> Number:
         """Convert to number."""
         if self.value:
             return Number(1)
         return Number(0)
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
         return String(str(self))
 
     def is_truthy(self) -> bool:
@@ -465,7 +468,7 @@ class Nil(Value):
     type = NilType.instance()
     instance: "Nil"
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
         return String(str(self))
 
@@ -545,11 +548,11 @@ class Number(Value):
         """Negation unary operator."""
         return Number(-self.value)
 
-    def to_num(self, context: ExecutionContext, pos: Position) -> "Number":
+    def to_num(self, context: ExecutionContext, pos: Position) -> Number:
         """Convert to number."""
         return self
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
         return String(str(self))
 
@@ -624,7 +627,7 @@ class String(Value):
             return String(self.value[int(key.value)])
         raise ExecutionError(f"{String.type.name} indices must be {NumberType.name}", context.stack, pos)
 
-    def to_str(self, context: ExecutionContext, pos: Position) -> "String":
+    def to_str(self, context: ExecutionContext, pos: Position) -> String:
         """Convert to string."""
         return self
 
