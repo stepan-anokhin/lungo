@@ -17,7 +17,7 @@ pip install --upgrade lungo
 Usage:
 
 ```shell
-lung [FILE]
+lungo [FILE]
 ```
 
 ## Syntax
