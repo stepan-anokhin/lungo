@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from typing import Optional, TextIO
 
@@ -11,6 +13,7 @@ import lungo.runtime as rt
 from lungo.lexer import Lexer
 from lungo.parser import Parser, SyntacticError
 from lungo.prompt import PromptLexer, Prompt
+from lungo.sources_cache import SourceCache
 from lungo.translator import Translator
 
 
@@ -52,6 +55,17 @@ class Interpreter:
         syntax_tree = self._parser.parse(tokens)
         return self._translator.translate(syntax_tree)
 
+    @staticmethod
+    def print_stacktrace(error: rt.ExecutionError, output: TextIO = sys.stderr, sources: Optional[SourceCache] = None):
+        """Print stack-trace."""
+        print("Stack trace:", file=output)
+        for frame in error.stack:
+            print(f"  In file '{frame.pos.file}', line {frame.pos.line}", file=output)
+            if sources is not None:
+                line = sources.get_line(frame.pos)
+                print(f"    {line.lstrip()}")
+        print(f"{type(error).__name__}: {str(error)}")
+
     def make_prompt(
             self,
             prompt_lexer: Optional[PromptLexer] = None,
@@ -72,6 +86,7 @@ class Interpreter:
     def repl(self, output: TextIO = sys.stdout, err_output: TextIO = sys.stderr, input: TextIO = sys.stdin):
         global_scope = self.make_global_scope(prompt=rt.String("lungo> "))
 
+        sources = SourceCache()
         prompt = self.make_prompt(input=input, output=output)
         try:
             command_count = 0
@@ -81,14 +96,16 @@ class Interpreter:
 
         while True:
             try:
-                code = self.translate_sources(command, f"<command:{command_count}>")
+                command_key = f"<command:{command_count}>"
+                sources.add(text=command, filename=command_key, can_evict=False)
+                code = self.translate_sources(command, command_key)
                 context = self.make_context(global_scope, code)
                 value = code.execute(context)
                 print(repr(value), file=output)
             except SyntacticError as error:
                 print(str(error), file=err_output)
             except rt.ExecutionError as error:
-                print(str(error), file=err_output)
+                self.print_stacktrace(error, output=err_output, sources=sources)
 
             try:
                 command = prompt(str(global_scope.deref("prompt")))

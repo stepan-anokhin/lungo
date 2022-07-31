@@ -4,7 +4,7 @@ import abc
 import inspect
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Optional, Dict, List, Sequence, Union, Callable, Any
+from typing import Optional, Dict, List, Sequence, Union, Callable, Any, Iterator
 
 from lungo.lexer import Position
 
@@ -26,6 +26,11 @@ class CallStack:
 
     def pop(self) -> Frame:
         return self._frames.pop()
+
+    def __iter__(self) -> Iterator[Frame]:
+        """Iterate over frames."""
+        for frame in self._frames:
+            yield frame
 
 
 class ScopeError(Exception):
@@ -822,11 +827,12 @@ class Function(BasicFunction):
         arguments = dict(zip(self.arg_names, arguments))
         scope = self.lexical_context.nested(arguments)
         try:
-            return self.body.execute(context.push(pos, scope))
-        except _Returned as returned:
-            return returned.value
-        finally:
+            ret_value = self.body.execute(context.push(pos, scope))
             context.stack.pop()
+            return ret_value
+        except _Returned as returned:
+            context.stack.pop()
+            return returned.value
 
 
 class PyFunc(BasicFunction):
